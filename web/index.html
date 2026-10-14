@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-page-node-id="zrXB6LjvB9FGgV3uWWSnH9">
+<head data-page-node-id="KvDSXxgO6IETFwE07wKBId">
+    <meta charset="UTF-8" data-page-node-id="nsPAy82liauiDQoX4HYBZS">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" data-page-node-id="1OICsAbAILQIZinvF96gEN">
+    <title>四分屏复盘 · K线工具箱</title>
+    <link rel="stylesheet" href="/static/components/topnav.css">
+    <script src="/vendors/vue.global.prod.js"></script>
+    <script src="/vendors/echarts.min.js"></script>
+    <style>
+        :root{
+            --bg:#f0f2f7;
+            --panel:#ffffff;
+            --panel-2:#fafbfc;
+            --border:#ebedf0;
+            --border-soft:#f0f2f5;
+            --text:#1d1d1f;
+            --text-2:#424245;
+            --text-muted:#6e6e73;
+            --accent:#0a84ff;
+            --accent-2:#0066cc;
+            --accent-soft:#e8f1ff;
+            --green:#34c759;
+            --red:#ff3b30;
+            --orange:#ff9500;
+            --purple:#af52de;
+            --shadow-sm:0 1px 2px rgba(0,0,0,0.04);
+            --shadow:0 1px 3px rgba(0,0,0,0.04),0 4px 12px rgba(0,0,0,0.04);
+            --shadow-lg:0 2px 8px rgba(0,0,0,0.05),0 12px 28px rgba(0,0,0,0.06);
+            --radius:16px;
+            --radius-sm:10px;
+            --radius-pill:999px;
+            --font:-apple-system,BlinkMacSystemFont,"SF Pro Text","SF Pro Display","Helvetica Neue",system-ui,sans-serif;
+        }
+        *{margin:0;padding:0;box-sizing:border-box;}
+        html,body{height:100%;}
+        body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:13px;line-height:1.5;-webkit-font-smoothing:antialiased;}
+
+        /* ===== 顶部导航 ===== */
+        .topnav{min-height:56px;height:auto;flex-wrap:wrap;background:#fff;border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 24px;gap:12px;position:sticky;top:0;z-index:100;}
+        /* ===== 顶部工具按钮（同步/数据） ===== */
+        .topnav-actions{display:flex;align-items:center;gap:8px;margin-left:16px;padding-left:16px;border-left:1px solid var(--border);}
+        .nav-sync-btn{display:inline-flex;align-items:center;gap:6px;padding:7px 13px;border:1px solid transparent;border-radius:var(--radius-pill);font-size:12.5px;font-weight:500;cursor:pointer;font-family:inherit;transition:all .15s;line-height:1.2;background:transparent;color:var(--text-2);}
+        .nav-sync-btn svg{width:14px;height:14px;stroke-width:2;}
+        .nav-sync-btn:hover{background:#f0f2f5;color:var(--text);}
+        .nav-sync-btn:disabled{opacity:.45;cursor:not-allowed;}
+        .nav-sync-btn.db{color:var(--text-2);}
+        .nav-sync-btn.data{color:var(--accent);}
+        .nav-sync-btn.data:hover{background:var(--accent-soft);color:var(--accent);}
+        .sync-dot{width:7px;height:7px;border-radius:50%;background:var(--text-muted);flex-shrink:0;transition:all .3s;}
+        .sync-dot.idle{background:#d1d5db;}
+        .sync-dot.running{background:var(--orange);box-shadow:0 0 0 0 var(--orange);animation:syncPulse 1.4s infinite;}
+        .sync-dot.done{background:var(--green);}
+        .sync-dot.error{background:var(--red);}
+        @keyframes syncPulse{0%{box-shadow:0 0 0 0 rgba(255,149,0,.5);}70%{box-shadow:0 0 0 7px rgba(255,149,0,0);}100%{box-shadow:0 0 0 0 rgba(255,149,0,0);}}
+
+        /* ===== 数据同步状态浮窗 ===== */
+        .sync-panel{position:fixed;top:68px;right:16px;width:380px;max-height:520px;background:#fff;border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-lg);z-index:200;display:none;flex-direction:column;overflow:hidden;animation:slideDown .25s cubic-bezier(.32,.72,0,1);}
+        .sync-panel.open{display:flex;}
+        @keyframes slideDown{from{opacity:0;transform:translateY(-8px);}to{opacity:1;transform:translateY(0);}}
+        .sync-panel-head{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--border);background:#fafbfc;}
+        .sync-panel-title{font-size:13px;font-weight:600;color:var(--text);}
+        .sync-panel-meta{margin-left:auto;font-size:11.5px;color:var(--text-muted);font-family:Consolas,monospace;}
+        .sync-panel-close{background:transparent;border:none;color:var(--text-muted);cursor:pointer;font-size:18px;line-height:1;padding:2px 6px;border-radius:6px;}
+        .sync-panel-close:hover{background:#f0f2f5;color:var(--text);}
+        .sync-panel-body{flex:1;overflow-y:auto;padding:10px 14px;font-family:Consolas,monospace;font-size:11.5px;line-height:1.6;background:#1d1d1f;color:#e5e7eb;}
+        .sync-panel-body:empty::before{content:'暂无日志';display:block;color:#6e6e73;text-align:center;padding:20px 0;}
+        .log-line{display:flex;gap:8px;padding:1px 0;}
+        .log-time{color:#6e6e73;flex-shrink:0;}
+        .log-msg{flex:1;word-break:break-all;}
+        .log-line.info .log-msg{color:#d1d5db;}
+        .log-line.ok .log-msg{color:#34c759;}
+        .log-line.warn .log-msg{color:#ff9500;}
+        .log-line.err .log-msg{color:#ff453a;}
+        .sync-panel-foot{padding:10px 14px;border-top:1px solid var(--border);background:#fafbfc;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-muted);}
+        .sync-panel-foot .spacer{flex:1;}
+        .sync-mini-btn{padding:4px 12px;border:1px solid var(--border);border-radius:var(--radius-pill);background:#fff;color:var(--text-2);font-size:12px;cursor:pointer;font-family:inherit;transition:all .15s;}
+        .sync-mini-btn:hover{background:#f0f2f5;}
+        .sync-mini-btn.primary{background:var(--accent);color:#fff;border-color:var(--accent);}
+        .sync-mini-btn.primary:hover{background:var(--accent-2);}
+        .sync-status-tag{display:inline-flex;align-items:center;gap:5px;font-weight:500;}
+        .sync-status-tag.idle{color:var(--text-muted);}
+        .sync-status-tag.running{color:var(--orange);}
+        .sync-status-tag.done{color:var(--green);}
+        .sync-status-tag.error{color:var(--red);}
+
+        /* ===== 内容区 ===== */
+        .content{padding:18px 24px 24px;display:flex;flex-direction:column;gap:14px;min-height:calc(100vh - 56px);}
+        .page-heading{font-size:18px;font-weight:600;color:var(--text);letter-spacing:-.2px;margin-bottom:2px;}
+
+        /* ===== Card ===== */
+        .card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-sm);}
+
+        /* ===== Control bar ===== */
+        .control-card{display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:12px 18px;}
+        .seg{display:inline-flex;background:#f0f2f5;border-radius:var(--radius-pill);padding:3px;gap:2px;}
+        .seg button{padding:6px 14px;border:none;background:transparent;color:var(--text-muted);border-radius:var(--radius-pill);cursor:pointer;font-size:13px;font-family:inherit;transition:all .15s;font-weight:500;}
+        .seg button:hover{color:var(--text);}
+        .seg button.active{background:#fff;color:var(--text);box-shadow:0 1px 2px rgba(0,0,0,0.06);}
+        .seg button:disabled{opacity:.4;cursor:not-allowed;}
+        .label{color:var(--text-muted);font-size:12.5px;}
+
+        input[type=text],input[type=date]{padding:7px 11px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;background:var(--panel-2);color:var(--text);width:140px;font-family:inherit;transition:border-color .15s,box-shadow .15s;}
+        input::placeholder{color:#9ca3af;}
+        input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(10,132,255,0.15);}
+
+        .btn{padding:7px 16px;border-radius:var(--radius-pill);border:none;cursor:pointer;font-size:13px;font-family:inherit;font-weight:500;transition:all .15s;display:inline-flex;align-items:center;gap:6px;line-height:1.2;}
+        .btn-primary{background:var(--text);color:#fff;}
+        .btn-primary:hover{background:#000;transform:translateY(-1px);}
+        .btn-primary:disabled{background:#d1d5db;color:#9ca3af;cursor:not-allowed;transform:none;}
+        .btn-accent{background:var(--accent);color:#fff;}
+        .btn-accent:hover{background:var(--accent-2);}
+        .btn-ghost{background:transparent;color:var(--text-muted);}
+        .btn-ghost:hover{background:#f0f2f5;color:var(--text);}
+        .btn-soft{background:#f0f2f5;color:var(--text);}
+        .btn-soft:hover{background:#e5e7eb;}
+        .btn-danger{background:var(--red);color:#fff;}
+        .btn-danger:hover{background:#e02d24;}
+
+        .tip{color:var(--text-muted);font-size:12.5px;margin-left:auto;}
+        .tip.ok{color:var(--green);}
+        .tip.err{color:var(--red);}
+
+        /* ===== Chart grid ===== */
+        .chart-grid{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:16px;flex:1;min-height:0;}
+        .chart-card{padding:14px 16px;display:flex;flex-direction:column;min-height:0;transition:box-shadow .2s;}
+        .chart-card:hover{box-shadow:var(--shadow);}
+        .card-head{display:flex;align-items:center;gap:10px;margin-bottom:8px;}
+        .chart-tag{display:inline-flex;align-items:center;justify-content:center;min-width:34px;padding:3px 10px;background:var(--accent-soft);color:var(--accent);border-radius:var(--radius-pill);font-size:11.5px;font-weight:600;letter-spacing:.3px;}
+        .chart-meta{font-size:12px;color:var(--text-muted);}
+        .chart-warn{font-size:12px;color:var(--red);font-weight:500;}
+        .chart-box{flex:1;min-height:0;background:#fafbfc;border-radius:8px;}
+
+        /* ===== Scrollbar ===== */
+        ::-webkit-scrollbar{width:8px;height:8px;}
+        ::-webkit-scrollbar-track{background:transparent;}
+        ::-webkit-scrollbar-thumb{background:rgba(0,0,0,.12);border-radius:4px;}
+        ::-webkit-scrollbar-thumb:hover{background:rgba(0,0,0,.2);}
+    </style>
+</head>
+<body data-page-node-id="uskcyLzlkkwMHyIBBVqJnp">
+<header class="topnav" data-page-node-id="6GvzS7LNZcaZuJHnqjNs0o">
+    <topnav-bar class="topnav-links" data-active="/"></topnav-bar>
+    <div class="topnav-actions">
+        <button class="nav-sync-btn db" id="syncDbBtn" title="校验并创建数据库表结构">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"/></svg>
+            校验库
+        </button>
+        <button class="nav-sync-btn data" id="syncDataBtn" title="从 Binance 增量同步行情">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+            同步行情
+        </button>
+    </div>
+</header>
+
+<!-- 数据同步状态浮窗 -->
+<div id="syncPanel" class="sync-panel" data-page-node-id="TeEQD25FQDVPJHDWSuTuVL">
+    <div class="sync-panel-head" data-page-node-id="YlCPeHlcVvdQtTwOxhjbUr">
+        <span class="sync-panel-title" data-page-node-id="xotRuMxK079NaAlVlYS2nq">📡 数据同步</span>
+        <span class="sync-panel-meta" id="syncElapsed" data-page-node-id="HDwzC2piMKFhgAVHabB2U3">--:--</span>
+        <button class="sync-panel-close" id="syncCloseBtn" title="关闭" data-page-node-id="9vwNeQOnpj1HuEHzoKAZ1r">×</button>
+    </div>
+    <div class="sync-panel-body" id="syncLogs" data-page-node-id="ZbA18sb0rx8xx1c6k9Zo8L"></div>
+    <div class="sync-panel-foot" data-page-node-id="GOeEzwww4A6y3YAn1L02EQ">
+        <span class="sync-status-tag" id="syncStatusTag" data-page-node-id="yb6Jjd4PlhjYMYcfyv1bNo"><span class="sync-dot idle" data-page-node-id="dHxydQGtdrfDgCcGC65WEV"></span><span data-page-node-id="LiZKz2wVC7k6jN43WbFXm4">空闲</span></span>
+        <span class="spacer" data-page-node-id="7SFtwoPBB9z5mV5OuZ4shJ"></span>
+        <button class="sync-mini-btn" id="syncClearBtn" data-page-node-id="hoBuqVqB9tjqsDfTiDS08d">清空日志</button>
+    </div>
+</div>
+
+<div id="app" data-page-node-id="8tbieAIs17mpDPOnG7YGxv">
+    <div class="content" data-page-node-id="pyLPXd2sseqkyDoajw1uyG">
+        <h1 class="page-heading" data-page-node-id="T21Vowwgv2FLdntPPQbo6N">四分屏复盘</h1>
+
+        <div class="card control-card" data-page-node-id="W5TJmBpxMi5HtYZBtHynh8">
+            <div class="seg" data-page-node-id="ZcRzkkufxOuxlhTYK4hkyq">
+                <button :class="{active: activeRange==='3d'}" @click="fastRange('3d')" :disabled="loading" data-page-node-id="GjJ3DFJXiNd8lgtMBlX0yg">近3日</button>
+                <button :class="{active: activeRange==='1w'}" @click="fastRange('1w')" :disabled="loading" data-page-node-id="41OcCD4qSEPIxpwNFRIFiv">近1周</button>
+                <button :class="{active: activeRange==='1m'}" @click="fastRange('1m')" :disabled="loading" data-page-node-id="NnXxa5DV32DOzCyuDmeWce">近1月</button>
+                <button :class="{active: activeRange==='3m'}" @click="fastRange('3m')" :disabled="loading" data-page-node-id="mguXF2hrKfqDfJEo70y67u">近3月</button>
+                <button :class="{active: activeRange==='6m'}" @click="fastRange('6m')" :disabled="loading" data-page-node-id="LNaB0Mq1qJEwB9JP0NHgXP">近半年</button>
+            </div>
+            <span class="label" data-page-node-id="koiRFAvSFVme6UR8qHsGNF">起始：</span>
+            <input v-model="startTime" placeholder="YYYY-MM-DD" @keyup.enter="queryAll" data-page-node-id="tvaEGPLVNnS0nVLRFksgT5">
+            <span class="label" data-page-node-id="ztM8eFmXq4TF4qQsEVlB7e">结束：</span>
+            <input v-model="endTime" placeholder="YYYY-MM-DD" @keyup.enter="queryAll" data-page-node-id="f8LbgsE5MGwRcz9E1TJqdU">
+            <button class="btn btn-primary" @click="queryAll" :disabled="loading" data-page-node-id="AkrZeBukcAvEUupmnWin2m">
+                {{ loading ? '加载中…' : '加载全部周期' }}
+            </button>
+            <span class="tip" :class="{ok: msg.startsWith('✅')}" v-if="msg" data-page-node-id="hxQeV4pT9jNpKoUhPZDpG5">{{ msg }}</span>
+        </div>
+
+        <div class="chart-grid" data-page-node-id="EnTOG8R8zf7TzewEdfPjCR">
+            <div class="card chart-card" data-page-node-id="znuGTIwMTmAqHYSr8k624m">
+                <div class="card-head" data-page-node-id="fHwrog3S4Fc0AEdOF7Csi9">
+                    <span class="chart-tag" data-page-node-id="zn5qu2QHKnSvJdC82GenPP">1M</span>
+                    <span class="chart-meta" v-if="counts['1m']" data-page-node-id="jJXZO8rcHEJP5JBuxDElvd">{{ counts['1m'] }} 条</span>
+                    <span class="chart-warn" v-if="truncated['1m']" data-page-node-id="Rd1jv7F0tacGFvQVyAAzAB">⚠ 已截断</span>
+                </div>
+                <div class="chart-box" id="chart1" data-page-node-id="l5AXBrQIuDmLwI9HYvYIc9"></div>
+            </div>
+            <div class="card chart-card" data-page-node-id="3kZBy5tHyA0EhX6pYm3K8j">
+                <div class="card-head" data-page-node-id="0yAmYb1Z2JUIihgEH3QDum">
+                    <span class="chart-tag" data-page-node-id="MCgnUEwOe4DpAL2Prw7LYD">5M</span>
+                    <span class="chart-meta" v-if="counts['5m']" data-page-node-id="69X4knkF6CnI2LR8eHCzvI">{{ counts['5m'] }} 条</span>
+                    <span class="chart-warn" v-if="truncated['5m']" data-page-node-id="2D2a4kTrAD4e9dCWOAk4HR">⚠ 已截断</span>
+                </div>
+                <div class="chart-box" id="chart2" data-page-node-id="EmWpxb1rfhcH33F6SMJaFK"></div>
+            </div>
+            <div class="card chart-card" data-page-node-id="mYtRzhocZLLhCzIdRbS3eb">
+                <div class="card-head" data-page-node-id="pxmrU5MgzvGP89scwIN2Po">
+                    <span class="chart-tag" data-page-node-id="ZR8rsPD9CT5AXVqbQ0gPFX">15M</span>
+                    <span class="chart-meta" v-if="counts['15m']" data-page-node-id="emEzxmaKxgLlP3lHKqdDjx">{{ counts['15m'] }} 条</span>
+                    <span class="chart-warn" v-if="truncated['15m']" data-page-node-id="UaUca05yT9WJxBFOvr5boA">⚠ 已截断</span>
+                </div>
+                <div class="chart-box" id="chart3" data-page-node-id="ZTZRqCWItJHlespWaLd0a4"></div>
+            </div>
+            <div class="card chart-card" data-page-node-id="JHdVc0zQGpH8fvpu9lXf8D">
+                <div class="card-head" data-page-node-id="AAhqdQMcHu1nlj9lJEY6wi">
+                    <span class="chart-tag" data-page-node-id="pM7SinX7NqdAWupSX2RiRs">30M</span>
+                    <span class="chart-meta" v-if="counts['30m']" data-page-node-id="xo2bRuaY03HLWEvsgOAYhu">{{ counts['30m'] }} 条</span>
+                    <span class="chart-warn" v-if="truncated['30m']" data-page-node-id="JQRs9LCZ5ugB9KA4JnyxV2">⚠ 已截断</span>
+                </div>
+                <div class="chart-box" id="chart4" data-page-node-id="6vvzZc1x8WGEtSMIXaa7SS"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const { createApp, ref, reactive } = Vue
+
+createApp({
+    setup() {
+        const CHART_GROUP = 'quant_review_group'
+        const chartInstances = {}
+
+        const periods = [
+            { key: '1m',  dom: 'chart1' },
+            { key: '5m',  dom: 'chart2' },
+            { key: '15m', dom: 'chart3' },
+            { key: '30m', dom: 'chart4' },
+        ]
+
+        const startTime = ref('')
+        const endTime = ref('')
+        const loading = ref(false)
+        const msg = ref('')
+        const activeRange = ref('')
+        const counts = reactive({})
+        const truncated = reactive({})
+
+        const fastRange = async (t) => {
+            if (loading.value) return
+            activeRange.value = t
+            const res = await fetch(`/api/kline/fastrange?typ=${t}`)
+            const json = await res.json()
+            if (json.code === 200) {
+                startTime.value = json.startTime
+                endTime.value = json.endTime
+            }
+        }
+
+        const fetchWithTimeout = (url, timeout = 30000) => {
+            const controller = new AbortController()
+            const timer = setTimeout(() => controller.abort(), timeout)
+            return fetch(url, { signal: controller.signal }).finally(() => clearTimeout(timer))
+        }
+
+        const queryAll = async () => {
+            if (loading.value) return
+            if (!startTime.value) {
+                msg.value = '请填写起始时间'
+                return
+            }
+
+            loading.value = true
+            msg.value = '正在请求数据...'
+
+            Object.keys(counts).forEach(k => delete counts[k])
+            Object.keys(truncated).forEach(k => delete truncated[k])
+            Object.values(chartInstances).forEach(c => c.dispose())
+            for (const k of Object.keys(chartInstances)) delete chartInstances[k]
+
+            try {
+                const results = await Promise.all(
+                    periods.map(async (p) => {
+                        const params = new URLSearchParams()
+                        params.append('startTime', startTime.value)
+                        if (endTime.value) params.append('endTime', endTime.value)
+                        params.append('interval', p.key)
+                        const url = `/api/kline/review?${params.toString()}`
+                        const resp = await fetchWithTimeout(url)
+                        const json = await resp.json()
+                        return { key: p.key, dom: p.dom, ...json }
+                    })
+                )
+
+                results.forEach((r) => {
+                    counts[r.key] = r.data?.length ?? 0
+                    truncated[r.key] = r.truncated ?? false
+                    renderSingleChart(r.dom, r.data || [])
+                })
+
+                if (Object.keys(chartInstances).length > 0) {
+                    echarts.connect(CHART_GROUP)
+                }
+
+                const truncatedKeys = results.filter(r => r.truncated).map(r => r.key.toUpperCase())
+                if (truncatedKeys.length > 0) {
+                    msg.value = `⚠ 数据量过大，${truncatedKeys.join('、')} 已截断至前10000条，请缩小查询范围`
+                } else {
+                    msg.value = '✅ 全部加载完成'
+                }
+            } catch (err) {
+                console.error('加载异常：', err)
+                if (err.name === 'AbortError') {
+                    msg.value = '❌ 请求超时！请缩小查询区间'
+                } else {
+                    msg.value = '❌ 加载失败：' + err.message
+                }
+            } finally {
+                loading.value = false
+            }
+        }
+
+        const renderSingleChart = (domId, list) => {
+            const dom = document.getElementById(domId)
+            const chart = echarts.init(dom, null, { renderer: 'canvas' })
+            chartInstances[domId] = chart
+            chart.group = CHART_GROUP
+
+            const kData = list.map(item => [
+                item.open_time,
+                item.open_price,
+                item.close_price,
+                item.low_price,
+                item.high_price,
+            ])
+
+            const volData = list.map(item => [
+                item.open_time,
+                item.volume,
+            ])
+
+            const option = {
+                backgroundColor: 'transparent',
+                tooltip: {
+                    trigger: 'axis',
+                    axisPointer: { type: 'cross' },
+                    backgroundColor: 'rgba(255,255,255,0.98)',
+                    borderColor: '#ebedf0',
+                    borderWidth: 1,
+                    textStyle: { color: '#1d1d1f', fontSize: 12 },
+                    extraCssText: 'box-shadow: 0 4px 16px rgba(0,0,0,0.08); border-radius: 8px;',
+                },
+                grid: [
+                    { left: '5%', right: '4%', top: '6%', height: '60%' },
+                    { left: '5%', right: '4%', top: '72%', height: '16%' },
+                ],
+                xAxis: [
+                    {
+                        type: 'time',
+                        gridIndex: 0,
+                        axisLine: { lineStyle: { color: '#e5e7eb' } },
+                        axisLabel: { color: '#6e6e73', fontSize: 11 },
+                        splitLine: { show: false },
+                        axisTick: { show: false },
+                    },
+                    {
+                        type: 'time',
+                        gridIndex: 1,
+                        axisLine: { lineStyle: { color: '#e5e7eb' } },
+                        axisLabel: { color: '#6e6e73', fontSize: 11 },
+                        splitLine: { show: false },
+                        axisTick: { show: false },
+                    },
+                ],
+                yAxis: [
+                    {
+                        scale: true,
+                        splitArea: { show: false },
+                        axisLabel: { color: '#1d1d1f', fontSize: 11.5, fontWeight: 500, margin: 12, formatter: (v) => Number(v).toFixed(v >= 1000 ? 1 : 2) },
+                        splitLine: { lineStyle: { color: '#e5e7eb' } },
+                        axisLine: { show: false },
+                        axisTick: { show: false },
+                    },
+                    {
+                        gridIndex: 1,
+                        axisLabel: { color: '#6e6e73', fontSize: 10 },
+                        splitLine: { show: false },
+                        axisLine: { show: false },
+                        axisTick: { show: false },
+                    },
+                ],
+                dataZoom: [
+                    {
+                        type: 'slider',
+                        xAxisIndex: [0, 1],
+                        bottom: '3%',
+                        height: 14,
+                        borderColor: '#ebedf0',
+                        backgroundColor: '#fafbfc',
+                        dataBackground: {
+                            lineStyle: { color: '#d1d5db' },
+                            areaStyle: { color: '#f0f2f5' },
+                        },
+                        selectedDataBackground: {
+                            lineStyle: { color: '#0a84ff' },
+                            areaStyle: { color: 'rgba(10,132,255,0.15)' },
+                        },
+                        handleStyle: { color: '#fff', borderColor: '#0a84ff', borderWidth: 2 },
+                        textStyle: { color: '#6e6e73' },
+                    },
+                    {
+                        type: 'inside',
+                        xAxisIndex: [0, 1],
+                        zoomOnMouseWheel: true,
+                        moveOnMouseMove: true,
+                    },
+                ],
+                series: [
+                    {
+                        name: 'K线',
+                        type: 'candlestick',
+                        data: kData,
+                        itemStyle: {
+                            color: '#34c759',
+                            color0: '#ff3b30',
+                            borderColor: '#34c759',
+                            borderColor0: '#ff3b30',
+                            borderWidth: 1,
+                        },
+                    },
+                    {
+                        name: '成交量',
+                        type: 'bar',
+                        xAxisIndex: 1,
+                        yAxisIndex: 1,
+                        data: volData,
+                        itemStyle: { color: '#0a84ff' },
+                    },
+                ],
+            }
+            chart.setOption(option)
+        }
+
+        window.addEventListener('resize', () => {
+            Object.values(chartInstances).forEach(c => c.resize())
+        })
+
+        // ========== 数据同步（顶栏按钮） ==========
+        const syncPanel = document.getElementById('syncPanel')
+        const syncLogs = document.getElementById('syncLogs')
+        const syncElapsed = document.getElementById('syncElapsed')
+        const syncStatusTag = document.getElementById('syncStatusTag')
+        const syncDbBtn = document.getElementById('syncDbBtn')
+        const syncDataBtn = document.getElementById('syncDataBtn')
+        const syncDbDot = document.getElementById('syncDbDot')
+        const syncDataDot = document.getElementById('syncDataDot')
+        const syncClearBtn = document.getElementById('syncClearBtn')
+        const syncCloseBtn = document.getElementById('syncCloseBtn')
+
+        let pollTimer = null
+        let pollStart = 0
+        let lastLogCount = 0
+
+        const openPanel = () => { syncPanel.classList.add('open') }
+        const closePanel = () => { syncPanel.classList.remove('open') }
+        syncCloseBtn.addEventListener('click', closePanel)
+        syncClearBtn.addEventListener('click', () => { syncLogs.innerHTML = ''; lastLogCount = 0 })
+
+        const setDots = (status) => {
+            // status: {running, task: 'db'|'data'|null, finished_at}
+            const clsIdle = 'idle', clsRun = 'running', clsDone = 'done', clsErr = 'error'
+            const syncDbDot = document.getElementById('syncDbDot')
+            const syncDataDot = document.getElementById('syncDataDot')
+            const setDot = (el, cls) => { if (el) el.className = 'sync-dot ' + cls }
+            if (status.running) {
+                setDot(status.task === 'data' ? syncDataDot : syncDbDot, clsRun)
+                setDot(status.task === 'db' ? syncDataDot : syncDbDot, clsIdle)
+            } else if (status.finished_at) {
+                const ok = !status.summary || !status.summary.error
+                setDot(syncDbDot, clsIdle)
+                setDot(syncDataDot, clsIdle)
+                if (status.task === 'data') setDot(syncDataDot, ok ? clsDone : clsErr)
+                else if (status.task === 'db') setDot(syncDbDot, ok ? clsDone : clsErr)
+            } else {
+                setDot(syncDbDot, clsIdle)
+                setDot(syncDataDot, clsIdle)
+            }
+        }
+
+        const setStatusText = (status) => {
+            let label = '空闲', cls = 'idle'
+            if (status.running) {
+                label = status.task === 'data' ? '正在抓取 K线' : '正在建表'
+                cls = 'running'
+            } else if (status.finished_at) {
+                const ok = !status.summary || !status.summary.error
+                label = ok ? '已完成' : '失败'
+                cls = ok ? 'done' : 'error'
+            }
+            syncStatusTag.className = 'sync-status-tag ' + cls
+            syncStatusTag.innerHTML = `<span class="sync-dot ${cls}"></span><span>${label}</span>`
+        }
+
+        const appendLogs = (logs) => {
+            if (!logs || logs.length === lastLogCount) return
+            const frag = document.createDocumentFragment()
+            for (let i = lastLogCount; i < logs.length; i++) {
+                const l = logs[i]
+                const row = document.createElement('div')
+                row.className = 'log-line ' + (l.level || 'info')
+                const t = document.createElement('span'); t.className = 'log-time'; t.textContent = l.time
+                const m = document.createElement('span'); m.className = 'log-msg'; m.textContent = l.msg
+                row.appendChild(t); row.appendChild(m)
+                frag.appendChild(row)
+            }
+            syncLogs.appendChild(frag)
+            syncLogs.scrollTop = syncLogs.scrollHeight
+            lastLogCount = logs.length
+        }
+
+        const tickElapsed = () => {
+            if (!pollStart) { syncElapsed.textContent = '--:--'; return }
+            const sec = Math.floor((Date.now() - pollStart) / 1000)
+            const mm = String(Math.floor(sec / 60)).padStart(2, '0')
+            const ss = String(sec % 60).padStart(2, '0')
+            syncElapsed.textContent = `${mm}:${ss}`
+        }
+
+        const pollStatus = async () => {
+            try {
+                const res = await fetch('/api/sync/status')
+                const json = await res.json()
+                const s = json.data || {}
+                if (s.running) {
+                    if (!pollStart) pollStart = new Date(s.started_at || Date.now()).getTime()
+                    tickElapsed()
+                } else {
+                    pollStart = 0
+                    tickElapsed()
+                    if (pollTimer) { clearInterval(pollTimer); pollTimer = null }
+                    syncDbBtn.disabled = false
+                    syncDataBtn.disabled = false
+                }
+                setDots(s)
+                setStatusText(s)
+                appendLogs(s.logs || [])
+            } catch (e) { /* 静默 */ }
+        }
+
+        const startPolling = () => {
+            if (pollTimer) return
+            pollTimer = setInterval(pollStatus, 1500)
+            pollStatus()
+        }
+
+        syncDbBtn.addEventListener('click', async () => {
+            openPanel()
+            syncDbBtn.disabled = true
+            syncDataBtn.disabled = true
+            syncLogs.innerHTML = ''
+            lastLogCount = 0
+            try {
+                const res = await fetch('/api/sync/db', { method: 'POST' })
+                const json = await res.json()
+                if (json.code !== 200) {
+                    alert('同步数据库失败：' + (json.msg || '未知错误'))
+                    syncDbBtn.disabled = false; syncDataBtn.disabled = false
+                } else {
+                    pollStatus()
+                }
+            } catch (e) {
+                alert('请求失败：' + e.message)
+                syncDbBtn.disabled = false; syncDataBtn.disabled = false
+            }
+        })
+
+        syncDataBtn.addEventListener('click', async () => {
+            openPanel()
+            syncLogs.innerHTML = '<div class="log-line info"><span class="log-time">--:--</span><span class="log-msg">⏳ 正在启动后台任务...</span></div>'
+            lastLogCount = 0
+            syncDbBtn.disabled = true
+            syncDataBtn.disabled = true
+            try {
+                const res = await fetch('/api/sync/data', { method: 'POST' })
+                const json = await res.json()
+                if (json.code !== 200) {
+                    alert('启动同步失败：' + (json.msg || '未知错误'))
+                    syncDbBtn.disabled = false; syncDataBtn.disabled = false
+                } else {
+                    startPolling()
+                }
+            } catch (e) {
+                alert('请求失败：' + e.message)
+                syncDbBtn.disabled = false; syncDataBtn.disabled = false
+            }
+        })
+
+        // 页面加载时拉一次状态（恢复上次面板状态）
+        pollStatus()
+
+        return { startTime, endTime, loading, msg, activeRange, counts, truncated, fastRange, queryAll }
+    },
+}).mount('#app')
+</script>
+<script src="/static/components/topnav.js" defer></script></body>
+</html>

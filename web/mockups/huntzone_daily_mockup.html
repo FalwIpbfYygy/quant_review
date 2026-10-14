@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>狩猎区每日效果图 · 30m（mock）</title>
+<script src="/vendors/echarts.min.js"></script>
+<style>
+body{margin:0;background:#f6f7fb;font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;font-size:14px;color:#1a1d2e}
+.wrap{max-width:1200px;margin:0 auto;padding:16px}
+h1{font-size:20px;margin:0 0 8px}
+.sub{color:#5a6178;font-size:13px;margin-bottom:14px}
+.card{background:#fff;border:1px solid #eef0f4;border-radius:8px;padding:14px}
+.chart-box{width:100%;height:560px}
+.leg{display:flex;gap:18px;flex-wrap:wrap;margin-top:10px;font-size:12px;color:#5a6178}
+.badge{display:inline-block;padding:2px 10px;border-radius:10px;font-size:12px;font-weight:600}
+.short{background:#ffe3f1;color:#c2185b}
+.long{background:#e3fbe9;color:#1b7a3d}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>狩猎区每日效果图 · 30m（mock 数据）</h1>
+  <div class="sub">
+    仅展示：30m K线 + 9档阶梯线（0/19.1/38.2/50/61.8/80.9/100/161.8/261.8）+ 狩猎区色带 + 方向。
+    <b>不展示持仓/挂单/止盈止损/事件。</b>
+  </div>
+  <div class="card">
+    <div id="chart" class="chart-box"></div>
+    <div class="leg">
+      <span><span class="badge short">做空</span> 方向：short</span>
+      <span style="color:#BA7517">■ 橙实线 = 狩猎区边界 38.2 / 61.8</span>
+      <span style="color:#ff6fae;background:rgba(255,111,174,0.15);padding:0 6px;border-radius:3px">■ 粉色区 = 做空狩猎区 [38.2,61.8]</span>
+      <span style="color:#A32D2D">— 红线 = 止损 19.1</span>
+      <span style="color:#0F6E56">— 绿线 = 衰竭 161.8 / 261.8</span>
+      <span style="color:#185FA5">— 蓝线 = 开盘价 100.0</span>
+    </div>
+  </div>
+</div>
+<script>
+(function () {
+  // mock 参数
+  var open_px = 2650.00;
+  var S = 30.00;
+  var direction = 'short';
+
+  function priceAt(ratio) {
+    // 做空：0.0 在开盘上方；做多：0.0 在开盘下方
+    return direction === 'short'
+      ? open_px + (1 - ratio) * S
+      : open_px + (ratio - 1) * S;
+  }
+
+  var levels = [
+    [0.000, '0.0'],
+    [0.191, '19.1'],
+    [0.382, '38.2'],
+    [0.500, '50.0'],
+    [0.618, '61.8'],
+    [0.809, '80.9'],
+    [1.000, '100.0'],
+    [1.618, '161.8'],
+    [2.618, '261.8']
+  ];
+
+  // zone 边界
+  var zone_lo = Math.min(priceAt(0.382), priceAt(0.618));
+  var zone_hi = Math.max(priceAt(0.382), priceAt(0.618));
+
+  // mock 30m candles：UTC 一天 00:00 ~ 22:30 = 45 根
+  var ts0 = new Date('2026-09-02T00:00:00Z').getTime();
+  var candles = [];
+  var px = open_px;
+  for (var i = 0; i < 45; i++) {
+    var t = ts0 + i * 30 * 60000;
+    // 前 20 根在 zone 上方震荡，然后向下刺破 zone，尾盘反弹
+    var mid = open_px + (i < 20 ? 20 : (i < 35 ? -2 - (i - 20) : -15 + (i - 35) * 2));
+    var o = px;
+    var c = mid + (Math.random() - 0.5) * 5;
+    var h = Math.max(o, c) + Math.random() * 4;
+    var l = Math.min(o, c) - Math.random() * 4;
+    candles.push([t, +o.toFixed(2), +h.toFixed(2), +l.toFixed(2), +c.toFixed(2)]);
+    px = c;
+  }
+
+  function fmtTs(ms) {
+    var d = new Date(ms);
+    function p(n){ return (n<10?'0':'')+n; }
+    return p(d.getUTCHours()) + ':' + p(d.getUTCMinutes());
+  }
+
+  var chart = echarts.init(document.getElementById('chart'), null, {renderer:'canvas'});
+  var labels = candles.map(function (c) { return fmtTs(c[0]); });
+  var cdata = candles.map(function (c) { return [c[1], c[4], c[3], c[2]]; });
+
+  var markLineData = [];
+  levels.forEach(function (lv) {
+    var r = lv[0], name = lv[1];
+    var price = priceAt(r);
+    var color, width = 1, dash = 'solid';
+    if (r === 0) { color = '#888780'; dash = 'dashed'; width = 0.8; }
+    else if (r === 0.191) { color = '#A32D2D'; width = 1.5; }
+    else if (r === 0.382 || r === 0.618) { color = '#BA7517'; width = 1.3; }
+    else if (r === 0.5) { color = '#BA7517'; width = 1; dash = 'dashed'; }
+    else if (r === 0.809) { color = '#BA7517'; width = 0.9; dash = 'dashed'; }
+    else if (r === 1.0) { color = '#185FA5'; width = 1.5; }
+    else { color = '#0F6E56'; width = 1.2; }
+    markLineData.push({
+      yAxis: price,
+      name: name,
+      lineStyle: { color: color, type: dash, width: width },
+      label: { show: true, position: 'insideStartTop',
+        formatter: name + ' ' + price.toFixed(1),
+        color: '#fff', backgroundColor: color,
+        padding: [2, 4], fontSize: 10, borderRadius: 2 }
+    });
+  });
+
+  chart.setOption({
+    backgroundColor: '#fff',
+    grid: { left: 62, right: 28, top: 28, bottom: 42 },
+    tooltip: { trigger: 'axis', axisPointer: { type: 'cross' } },
+    xAxis: {
+      type: 'category', data: labels, boundaryGap: true,
+      axisLabel: { fontSize: 10, color: '#5a6178' },
+      axisLine: { lineStyle: { color: '#d9dde7' } }
+    },
+    yAxis: {
+      scale: true,
+      axisLabel: { fontSize: 10, color: '#5a6178' },
+      splitLine: { lineStyle: { color: '#eef0f4' } }
+    },
+    dataZoom: [
+      { type: 'inside', start: 0, end: 100 },
+      { type: 'slider', start: 0, end: 100, height: 18, bottom: 18 }
+    ],
+    series: [{
+      type: 'candlestick', name: ' 30m', data: cdata,
+      itemStyle: {
+        color: '#e53935', color0: '#2ecc71',
+        borderColor: '#e53935', borderColor0: '#2ecc71'
+      },
+      markLine: { symbol: 'none', silent: true, data: markLineData },
+      markArea: {
+        silent: true,
+        itemStyle: { color: direction === 'short' ? 'rgba(255,111,174,0.12)' : 'rgba(46,204,113,0.12)' },
+        data: [[{ yAxis: zone_lo }, { yAxis: zone_hi }]]
+      },
+      markPoint: {
+        data: [{
+          coord: [0, open_px],
+          symbol: 'triangle',
+          symbolRotate: direction === 'short' ? 180 : 0,
+          symbolSize: 18,
+          itemStyle: { color: direction === 'short' ? '#c2185b' : '#1b7a3d' },
+          label: { show: true, formatter: direction === 'short' ? '做空' : '做多',
+            position: 'right', color: direction === 'short' ? '#c2185b' : '#1b7a3d',
+            fontSize: 12, fontWeight: 'bold' }
+        }]
+      }
+    }]
+  }, true);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,1270 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>信号复盘 · K线工具箱</title>
+    <link rel="stylesheet" href="/static/components/topnav.css">
+    <script src="/vendors/vue.global.prod.js"></script>
+    <script src="/vendors/echarts.min.js"></script>
+    <script src="/vendors/marked.min.js"></script>
+    <script src="/vendors/purify.min.js"></script>
+    <style>
+        :root{
+            --bg:#f0f2f7;
+            --panel:#ffffff;
+            --panel-2:#fafbfc;
+            --border:#ebedf0;
+            --border-soft:#f0f2f5;
+            --text:#1d1d1f;
+            --text-2:#424245;
+            --text-muted:#6e6e73;
+            --accent:#0a84ff;
+            --accent-2:#0066cc;
+            --accent-soft:#e8f1ff;
+            --green:#34c759;
+            --red:#ff3b30;
+            --orange:#ff9500;
+            --purple:#af52de;
+            --shadow-sm:0 1px 2px rgba(0,0,0,0.04);
+            --shadow:0 1px 3px rgba(0,0,0,0.04),0 4px 12px rgba(0,0,0,0.04);
+            --shadow-lg:0 2px 8px rgba(0,0,0,0.05),0 12px 28px rgba(0,0,0,0.06);
+            --radius:16px;
+            --radius-sm:10px;
+            --radius-pill:999px;
+            --font:-apple-system,BlinkMacSystemFont,"SF Pro Text","SF Pro Display","Helvetica Neue",system-ui,sans-serif;
+        }
+        *{margin:0;padding:0;box-sizing:border-box;}
+        html,body{height:100%;}
+        body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:13px;line-height:1.5;-webkit-font-smoothing:antialiased;}
+
+        /* ===== 顶部导航 ===== */
+        .topnav{min-height:56px;height:auto;flex-wrap:wrap;background:#fff;border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 24px;gap:12px;position:sticky;top:0;z-index:100;}
+        /* ===== 顶部工具按钮（同步/数据） ===== */
+        .topnav-actions{display:flex;align-items:center;gap:8px;margin-left:16px;padding-left:16px;border-left:1px solid var(--border);}
+        .nav-sync-btn{display:inline-flex;align-items:center;gap:6px;padding:7px 13px;border:1px solid transparent;border-radius:var(--radius-pill);font-size:12.5px;font-weight:500;cursor:pointer;font-family:inherit;transition:all .15s;line-height:1.2;background:transparent;color:var(--text-2);}
+        .nav-sync-btn svg{width:14px;height:14px;stroke-width:2;}
+        .nav-sync-btn:hover{background:#f0f2f5;color:var(--text);}
+        .nav-sync-btn:disabled{opacity:.45;cursor:not-allowed;}
+        .nav-sync-btn.db{color:var(--text-2);}
+        .nav-sync-btn.data{color:var(--accent);}
+        .nav-sync-btn.data:hover{background:var(--accent-soft);color:var(--accent);}
+        .sync-dot{width:7px;height:7px;border-radius:50%;background:var(--text-muted);flex-shrink:0;transition:all .3s;}
+        .sync-dot.idle{background:#d1d5db;}
+        .sync-dot.running{background:var(--orange);box-shadow:0 0 0 0 var(--orange);animation:syncPulse 1.4s infinite;}
+        .sync-dot.done{background:var(--green);}
+        .sync-dot.error{background:var(--red);}
+        @keyframes syncPulse{0%{box-shadow:0 0 0 0 rgba(255,149,0,.5);}70%{box-shadow:0 0 0 7px rgba(255,149,0,0);}100%{box-shadow:0 0 0 0 rgba(255,149,0,0);}}
+
+        /* ===== 数据同步状态浮窗 ===== */
+        .sync-panel{position:fixed;top:68px;right:16px;width:380px;max-height:520px;background:#fff;border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-lg);z-index:200;display:none;flex-direction:column;overflow:hidden;animation:slideDown .25s cubic-bezier(.32,.72,0,1);}
+        .sync-panel.open{display:flex;}
+        @keyframes slideDown{from{opacity:0;transform:translateY(-8px);}to{opacity:1;transform:translateY(0);}}
+        .sync-panel-head{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--border);background:#fafbfc;}
+        .sync-panel-title{font-size:13px;font-weight:600;color:var(--text);}
+        .sync-panel-meta{margin-left:auto;font-size:11.5px;color:var(--text-muted);font-family:Consolas,monospace;}
+        .sync-panel-close{background:transparent;border:none;color:var(--text-muted);cursor:pointer;font-size:18px;line-height:1;padding:2px 6px;border-radius:6px;}
+        .sync-panel-close:hover{background:#f0f2f5;color:var(--text);}
+        .sync-panel-body{flex:1;overflow-y:auto;padding:10px 14px;font-family:Consolas,monospace;font-size:11.5px;line-height:1.6;background:#1d1d1f;color:#e5e7eb;}
+        .sync-panel-body:empty::before{content:'暂无日志';display:block;color:#6e6e73;text-align:center;padding:20px 0;}
+        .log-line{display:flex;gap:8px;padding:1px 0;}
+        .log-time{color:#6e6e73;flex-shrink:0;}
+        .log-msg{flex:1;word-break:break-all;}
+        .log-line.info .log-msg{color:#d1d5db;}
+        .log-line.ok .log-msg{color:#34c759;}
+        .log-line.warn .log-msg{color:#ff9500;}
+        .log-line.err .log-msg{color:#ff453a;}
+        .sync-panel-foot{padding:10px 14px;border-top:1px solid var(--border);background:#fafbfc;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-muted);}
+        .sync-panel-foot .spacer{flex:1;}
+        .sync-mini-btn{padding:4px 12px;border:1px solid var(--border);border-radius:var(--radius-pill);background:#fff;color:var(--text-2);font-size:12px;cursor:pointer;font-family:inherit;transition:all .15s;}
+        .sync-mini-btn:hover{background:#f0f2f5;}
+        .sync-mini-btn.primary{background:var(--accent);color:#fff;border-color:var(--accent);}
+        .sync-mini-btn.primary:hover{background:var(--accent-2);}
+        .sync-status-tag{display:inline-flex;align-items:center;gap:5px;font-weight:500;}
+        .sync-status-tag.idle{color:var(--text-muted);}
+        .sync-status-tag.running{color:var(--orange);}
+        .sync-status-tag.done{color:var(--green);}
+        .sync-status-tag.error{color:var(--red);}
+
+        /* ===== 内容区 ===== */
+        .content{padding:18px 24px 32px;display:flex;flex-direction:column;gap:14px;min-height:calc(100vh - 56px);}
+        .page-heading{font-size:18px;font-weight:600;color:var(--text);letter-spacing:-.2px;margin-bottom:2px;}
+
+        /* ===== Card ===== */
+        .card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-sm);padding:20px 22px;}
+        .card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:14px;}
+        .card-title{font-size:15px;font-weight:600;color:var(--text);letter-spacing:-.1px;position:relative;padding-left:11px;margin-top:4px;}
+        .card-title::before{content:'';position:absolute;left:0;top:3px;bottom:3px;width:3px;border-radius:2px;background:var(--accent);}
+        .card-subtitle{font-size:12px;color:var(--text-muted);margin-top:3px;}
+
+        /* ===== Buttons & Inputs ===== */
+        .btn{padding:7px 16px;border-radius:var(--radius-pill);border:none;cursor:pointer;font-size:13px;font-family:inherit;font-weight:500;transition:all .15s;display:inline-flex;align-items:center;gap:6px;line-height:1.2;}
+        .btn-primary{background:var(--text);color:#fff;}
+        .btn-primary:hover{background:#000;transform:translateY(-1px);}
+        .btn-primary:disabled{background:#d1d5db;color:#9ca3af;cursor:not-allowed;transform:none;}
+        .btn-accent{background:var(--accent);color:#fff;}
+        .btn-accent:hover{background:var(--accent-2);}
+        .btn-accent:disabled{background:#d1d5db;color:#9ca3af;cursor:not-allowed;}
+        .btn-ghost{background:transparent;color:var(--text-muted);}
+        .btn-ghost:hover{background:#f0f2f5;color:var(--text);}
+        .btn-soft{background:#f0f2f5;color:var(--text);}
+        .btn-soft:hover{background:#e5e7eb;}
+        .btn-ai{background:linear-gradient(135deg,#af52de,#5856d6);color:#fff;display:inline-flex;align-items:center;gap:6px;font-family:inherit;font-size:13px;font-weight:600;flex-shrink:0;cursor:pointer;border:none;transition:all .15s;}
+        .btn-ai svg{width:15px;height:15px;flex-shrink:0;}
+        .btn-ai:hover{filter:brightness(1.05);transform:translateY(-1px);}
+        .btn-ai:disabled{background:#d1d5db;color:#9ca3af;cursor:not-allowed;transform:none;}
+
+        input,select,textarea{padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;background:var(--panel-2);color:var(--text);font-family:inherit;transition:border-color .15s,box-shadow .15s;}
+        input::placeholder,textarea::placeholder{color:#9ca3af;}
+        input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(10,132,255,0.15);}
+        input[type=number]{width:90px;}
+        input[type=text]{width:140px;}
+
+        label{color:var(--text-muted);font-size:11.5px;font-weight:500;}
+
+        .row{display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end;}
+        .row > div{display:flex;flex-direction:column;gap:5px;}
+
+        /* ===== 时间范围横排 tab（分段控件） ===== */
+        .range-tabs{display:inline-flex;align-items:center;align-self:flex-start;gap:2px;padding:3px;height:34px;background:#f0f2f5;border-radius:var(--radius-pill);}
+        .range-tab{height:28px;padding:0 14px;border:none;border-radius:var(--radius-pill);background:transparent;color:var(--text-2);font-size:12.5px;font-weight:500;font-family:inherit;cursor:pointer;white-space:nowrap;display:inline-flex;align-items:center;transition:all .15s;}
+        .range-tab:hover{color:var(--text);}
+        .range-tab.active{background:#fff;color:var(--text);font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,.10);}
+        .range-tab:disabled{opacity:.55;cursor:not-allowed;}
+
+        /* ===== 形态/架构多选：胶囊组（A 回测前过滤） ===== */
+        .pattern-pills{flex-wrap:wrap;height:auto;align-items:center;max-width:100%;}
+        .pattern-pills .range-tab{height:26px;margin:2px 0;}
+
+        /* ===== 形态/架构多选：下拉（B ⑥仅显示） ===== */
+        .pattern-filter-wrap{position:relative;}
+        .pattern-filter-btn{background:#f0f2f5;color:var(--text);font-weight:500;}
+        .pattern-filter-btn:hover{background:#e5e7eb;}
+        .pattern-pop{position:absolute;right:0;top:calc(100% + 6px);z-index:50;min-width:168px;max-height:280px;overflow:auto;background:#fff;border:1px solid #ebedf0;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.12);padding:6px;}
+        .pp-item{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:8px;font-size:13px;color:var(--text);cursor:pointer;white-space:nowrap;}
+        .pp-item:hover{background:#f0f2f5;}
+        .pp-item.active{background:#eaf2ff;color:#0a84ff;font-weight:600;}
+        .pp-all{border-bottom:1px solid #ebedf0;margin-bottom:4px;font-weight:500;}
+        .pp-check{width:14px;display:inline-block;color:#0a84ff;font-weight:700;}
+
+        .hint{font-size:11.5px;color:var(--text-muted);margin-top:6px;}
+        .msg{font-size:12.5px;}
+        .msg.err{color:var(--red);}
+        .msg.ok{color:var(--green);}
+
+        /* ===== Stats ===== */
+        .stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;}
+        .stat{background:var(--panel-2);border-radius:var(--radius-sm);padding:14px 18px;}
+        .stat .k{font-size:12px;color:var(--text-muted);margin-bottom:4px;}
+        .stat .v{font-size:22px;font-weight:600;letter-spacing:-.3px;}
+        .v.green{color:var(--green);}
+        .v.red{color:var(--red);}
+        .v.blue{color:var(--accent);}
+
+        /* ===== Table ===== */
+        .scroll{max-height:360px;overflow:auto;border:1px solid var(--border);border-radius:var(--radius-sm);}
+        table{width:100%;border-collapse:collapse;font-size:12.5px;}
+        th,td{padding:8px 12px;text-align:left;border-bottom:1px solid var(--border-soft);white-space:nowrap;}
+        th{color:var(--text-muted);font-weight:600;font-size:12px;position:sticky;top:0;background:#fff;cursor:pointer;user-select:none;}
+        th:first-child{border-top-left-radius:var(--radius-sm);}
+        th:last-child{border-top-right-radius:var(--radius-sm);}
+        td.num{text-align:right;font-family:Consolas,monospace;}
+        th.num{text-align:right;}
+        tr:hover td{background:#fafbfc;}
+        tr:last-child td{border-bottom:none;}
+        .pos{color:var(--green);}
+        .neg{color:var(--red);}
+        .tag{font-size:11px;padding:2px 9px;border-radius:var(--radius-pill);font-weight:500;}
+        .tag.sl{color:var(--red);background:rgba(255,59,48,.1);}
+        .tag.tp{color:var(--green);background:rgba(52,199,89,.1);}
+        .tag.open{color:var(--orange);background:rgba(255,149,0,.1);}
+
+        #equity{width:100%;height:280px;}
+
+        /* ===== AI Report ===== */
+        .ai-report{line-height:1.75;font-size:13.5px;color:var(--text);background:var(--panel-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:18px 22px;max-height:500px;overflow:auto;}
+        .ai-report h2{font-size:15px;color:var(--text);font-weight:600;margin:14px 0 6px;padding-bottom:5px;border-bottom:1px solid var(--border-soft);}
+        .ai-report h2:first-child{margin-top:0;}
+        .ai-report h3{font-size:14px;color:var(--accent);font-weight:600;margin:10px 0 4px;}
+        .ai-report h4{font-size:13.5px;color:var(--purple);font-weight:600;margin:8px 0 4px;}
+        .ai-report strong{color:var(--text);font-weight:700;}
+        .ai-report p{margin:6px 0;}
+        .ai-report ul,.ai-report ol{margin:6px 0 6px 20px;padding-left:4px;}
+        .ai-report li{margin:3px 0;}
+        .ai-report em{color:var(--orange);font-style:normal;}
+        .ai-report code{background:#f0f2f5;padding:1px 6px;border-radius:4px;color:var(--orange);font-family:Consolas,monospace;}
+        .copy-btn{font-size:12px;padding:5px 12px;}
+        .copy-btn.ok{color:var(--green);background:rgba(52,199,89,.1);border:1px solid rgba(52,199,89,.3);}
+
+        /* ===== AI 流式输出光标 ===== */
+        .ai-card{position:relative;}
+        .ai-cursor{display:inline-block;width:8px;height:1.1em;background:linear-gradient(180deg,#af52de,#5856d6);margin-left:2px;border-radius:2px;vertical-align:text-bottom;animation:aiBlink 1s steps(2,end) infinite;box-shadow:0 0 8px rgba(175,82,222,.5);}
+        @keyframes aiBlink{0%,49%{opacity:1;}50%,100%{opacity:0;}}
+        .ai-stream-stat{color:var(--purple);font-weight:500;margin-left:6px;animation:fadeIn .3s ease;}
+        @keyframes fadeIn{from{opacity:0;}to{opacity:1;}}
+        /* 流式状态下报告区滚动到底部 */
+        .ai-card.streaming .ai-report{border-color:rgba(175,82,222,.4);box-shadow:0 0 0 3px rgba(175,82,222,.08);}
+
+
+        /* ===== Scrollbar ===== */
+        ::-webkit-scrollbar{width:8px;height:8px;}
+        ::-webkit-scrollbar-track{background:transparent;}
+        ::-webkit-scrollbar-thumb{background:rgba(0,0,0,.12);border-radius:4px;}
+        ::-webkit-scrollbar-thumb:hover{background:rgba(0,0,0,.2);}
+
+        /* ===== 多轮对话面板 ===== */
+        .chat-panel{margin-top:16px;border:1px solid var(--border);border-radius:var(--radius-sm);background:linear-gradient(180deg,#fafbfc,#f5f8fc);padding:16px 18px;box-shadow:var(--shadow-sm);}
+        .chat-head{display:flex;align-items:center;margin-bottom:12px;}
+        .chat-title{font-size:14px;font-weight:600;color:var(--text);}
+        .chat-hint{font-size:12px;color:var(--text-muted);margin-left:8px;display:inline-flex;align-items:center;gap:6px;}
+        .chat-msgs{display:flex;flex-direction:column;gap:14px;max-height:420px;overflow:auto;padding:4px 2px;}
+        .chat-msg{display:flex;flex-direction:column;gap:5px;max-width:100%;}
+        .chat-msg .chat-role{font-size:11px;font-weight:600;color:var(--text-muted);display:flex;align-items:center;gap:6px;}
+        .chat-msg .chat-role::before{content:'';width:16px;height:16px;border-radius:50%;flex-shrink:0;}
+        .chat-msg.assistant .chat-role::before{background:linear-gradient(135deg,#af52de,#0a84ff);}
+        .chat-msg.user{align-items:flex-end;}
+        .chat-msg.user .chat-role{color:var(--accent);}
+        .chat-msg.user .chat-role::before{background:var(--accent);}
+        .chat-bubble{max-width:92%;border-radius:14px;padding:12px 16px;font-size:13.5px;line-height:1.6;word-break:break-word;}
+        .chat-msg.assistant .chat-bubble{background:var(--panel-2);border:1px solid var(--border);color:var(--text);border-top-left-radius:4px;}
+        .chat-msg.user .chat-bubble{background:var(--accent-soft);color:var(--accent-2);border-top-right-radius:4px;}
+        .chat-bubble.ai-report{max-height:none;overflow:visible;background:transparent;border:none;padding:0;}
+        .chat-input{display:flex;gap:8px;margin-top:12px;align-items:flex-end;background:#fff;border:1px solid var(--border);border-radius:14px;padding:8px 8px 8px 14px;transition:border-color .15s,box-shadow .15s;}
+        .chat-input:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft);}
+        .chat-input textarea{flex:1;min-height:24px;max-height:120px;resize:none;border:none;outline:none;background:transparent;font-family:inherit;font-size:13.5px;line-height:1.6;padding:6px 0;color:var(--text);}
+        .chat-input textarea:disabled{opacity:.6;cursor:not-allowed;}
+        .typing{display:inline-flex;gap:4px;align-items:center;}
+        .typing span{width:6px;height:6px;border-radius:50%;background:var(--accent);opacity:.4;animation:typing 1.2s infinite ease-in-out;}
+        .typing span:nth-child(2){animation-delay:.2s;}
+        .typing span:nth-child(3){animation-delay:.4s;}
+        @keyframes typing{0%,60%,100%{transform:translateY(0);opacity:.4}30%{transform:translateY(-4px);opacity:1}}
+</style>
+</head>
+<body>
+<header class="topnav">
+    <topnav-bar class="topnav-links" data-active="/review"></topnav-bar>
+    <div class="topnav-actions">
+        <button class="nav-sync-btn db" id="syncDbBtn" title="校验并创建数据库表结构">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"/></svg>
+            校验库
+        </button>
+        <button class="nav-sync-btn data" id="syncDataBtn" title="从 Binance 增量同步行情">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+            同步行情
+        </button>
+    </div>
+</header>
+
+<!-- 数据同步状态浮窗 -->
+<div id="syncPanel" class="sync-panel">
+    <div class="sync-panel-head">
+        <span class="sync-panel-title">📡 数据同步</span>
+        <span class="sync-panel-meta" id="syncElapsed">--:--</span>
+        <button class="sync-panel-close" id="syncCloseBtn" title="关闭">×</button>
+    </div>
+    <div class="sync-panel-body" id="syncLogs"></div>
+    <div class="sync-panel-foot">
+        <span class="sync-status-tag" id="syncStatusTag"><span class="sync-dot idle"></span><span>空闲</span></span>
+        <span class="spacer"></span>
+        <button class="sync-mini-btn" id="syncClearBtn">清空日志</button>
+    </div>
+</div>
+
+<div id="app">
+    <div class="content">
+        <h1 class="page-heading">信号复盘回测</h1>
+
+        <!-- 导入与参数 -->
+        <div class="card">
+            <div class="card-head">
+                <div>
+                    <div class="card-title">① 导入信号表</div>
+                    <div class="card-subtitle">格式：信号时间 / 周期 / 形态 / 方向 / 入场 / 止损 / TP1 / TP2，Tab 或逗号分隔</div>
+                </div>
+            </div>
+            <textarea v-model="cpText" placeholder="2026/8/25 7:06	30m	看跌Pinbar(做空)	做空	4671.67	4674.43	4632.83	-" style="width:100%;height:110px;font-family:Consolas,monospace;font-size:12px;"></textarea>
+            <div class="row" style="margin-top:10px;">
+                <button class="btn btn-ghost" @click="fillSample">填充示例</button>
+                <button class="btn btn-ghost" @click="fileInput.click()">📂 上传 CSV</button>
+                <button class="btn btn-ghost" @click="shiftSignalTime" title="把每行第一列的信号时间整体 +1 分钟（保持原格式）">⏱ 时间+1分钟</button>
+                <input ref="fileInput" type="file" accept=".csv,.txt" style="display:none" @change="importFile">
+                <span class="hint">支持 `2026/8/25 7:06` 等斜杠格式；`-` 或空表示无该价位</span>
+            </div>
+
+            <div class="row" style="margin-top:14px;">
+                <div><label>手数</label><input type="number" v-model.number="lot" step="0.01" min="0.01"></div>
+                <div><label>起始资金(u)</label><input type="number" v-model.number="startCapital" step="10" min="1"></div>
+                <div><label>点差(pips)</label><input type="number" v-model.number="spreadPips" step="1" min="0"></div>
+                <div><label>回测截止(可选)</label><input type="text" v-model="reviewEnd" placeholder="默认 信号最晚日+1天 23:00" style="width:200px;"></div>
+                <div><label>时间范围</label>
+                    <div class="range-tabs">
+                        <button v-for="r in RANGE_TABS" :key="r.id" class="range-tab"
+                                :class="{active: timeRange === r.id}" :disabled="loading"
+                                @click="timeRange = r.id">{{ r.label }}</button>
+                    </div>
+                </div>
+                <div><label>形态/架构</label>
+                    <div class="range-tabs pattern-pills">
+                        <button class="range-tab" :class="{active: !patternFilter.length}" :disabled="loading" @click="patternFilter = []">全部形态</button>
+                        <button v-for="p in patternOptions" :key="p" class="range-tab"
+                                :class="{active: patternFilter.includes(p)}" :disabled="loading"
+                                @click="togglePattern(p)">{{ p }}</button>
+                    </div>
+                </div>
+                <button class="btn btn-primary" :disabled="loading" @click="runBacktest">▶ 开始回测</button>
+                <button class="btn btn-primary" :disabled="loading" @click="runBacktestBinance" style="background:#ff9500;border-color:#ff9500;">🔗 Binance 回测</button>
+                <button class="btn btn-ai" :disabled="!summary || aiLoading" @click="genAiReport">{{ aiLoading ? '⏳ 流式生成中…' : '🤖 AI 复盘 · 流式 v2' }}</button>
+                <span class="msg" :class="tipClass" v-if="msg" style="margin-left:8px;align-self:center;">{{ msg }}</span>
+            </div>
+            <div class="hint" v-if="parseHint">{{ parseHint }}</div>
+        </div>
+
+        <!-- 汇总 -->
+        <div class="card" v-if="summary">
+            <div class="card-head">
+                <div>
+                    <div class="card-title">② 资金汇总</div>
+                </div>
+            </div>
+            <div class="stats-row">
+                <div class="stat"><div class="k">起始资金</div><div class="v blue">{{ summary.start_capital }} u</div></div>
+                <div class="stat"><div class="k">期末净值</div><div class="v" :class="summary.end_equity>=summary.start_capital?'green':'red'">{{ summary.end_equity }} u</div></div>
+                <div class="stat"><div class="k">总收益率</div><div class="v" :class="summary.total_return>=0?'green':'red'">{{ (summary.total_return*100).toFixed(1) }}%</div></div>
+                <div class="stat"><div class="k">最大回撤</div><div class="v red">{{ (summary.max_drawdown*100).toFixed(1) }}%</div></div>
+                <div class="stat"><div class="k">穿仓次数</div><div class="v" :class="summary.breach_count?'red':'green'">{{ summary.breach_count }}</div></div>
+                <div class="stat"><div class="k">已了结 / 未平仓</div><div class="v">{{ summary.closed_count }} / {{ summary.open_count }}</div></div>
+            </div>
+        </div>
+
+        <!-- 资金曲线 -->
+        <div class="card" v-if="equity.length">
+            <div class="card-head">
+                <div>
+                    <div class="card-title">③ 资金曲线</div>
+                    <div class="card-subtitle">含未平仓浮动盈亏</div>
+                </div>
+            </div>
+            <div id="equity"></div>
+        </div>
+
+        <!-- 策略统计 -->
+        <div class="card" v-if="strategyStats.length">
+            <div class="card-head">
+                <div>
+                    <div class="card-title">④ 策略统计</div>
+                    <div class="card-subtitle">仅已了结交易</div>
+                </div>
+            </div>
+            <div class="scroll">
+                <table>
+                    <thead><tr>
+                        <th @click="sortBy('pattern')">形态/架构</th>
+                        <th class="num" @click="sortBy('n')">笔数</th>
+                        <th class="num" @click="sortBy('wins')">胜</th>
+                        <th class="num" @click="sortBy('losses')">负</th>
+                        <th class="num" @click="sortBy('win_rate')">胜率</th>
+                        <th class="num" @click="sortBy('avg_rr')">平均RR</th>
+                        <th class="num" @click="sortBy('ev_r')">EV(R)</th>
+                        <th class="num" @click="sortBy('profit_factor')">盈利因子</th>
+                        <th class="num" @click="sortBy('total_pnl')">总盈亏(u)</th>
+                    </tr></thead>
+                    <tbody>
+                        <tr v-for="s in sortedStats" :key="s.pattern">
+                            <td>{{ s.pattern }}</td>
+                            <td class="num">{{ s.n }}</td>
+                            <td class="num pos">{{ s.wins }}</td>
+                            <td class="num neg">{{ s.losses }}</td>
+                            <td class="num">{{ (s.win_rate*100).toFixed(1) }}%</td>
+                            <td class="num">{{ s.avg_rr ?? '—' }}</td>
+                            <td class="num" :class="s.ev_r>=0?'pos':'neg'">{{ s.ev_r }}</td>
+                            <td class="num">{{ s.profit_factor ?? '—' }}</td>
+                            <td class="num" :class="s.total_pnl>=0?'pos':'neg'">{{ s.total_pnl }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- 最优盈亏比 -->
+        <div class="card" v-if="bestRr.length">
+            <div class="card-head">
+                <div>
+                    <div class="card-title">⑤ 最优盈亏比建议</div>
+                    <div class="card-subtitle">按策略扫描 k 倍 SL 距离，取 EV 最大</div>
+                </div>
+            </div>
+            <div class="scroll">
+                <table>
+                    <thead><tr><th>形态/架构</th><th class="num">建议k</th><th class="num">最佳EV(R)</th><th class="num">k=1</th><th class="num">1.5</th><th class="num">2</th><th class="num">2.5</th><th class="num">3</th><th class="num">4</th></tr></thead>
+                    <tbody>
+                        <tr v-for="b in bestRr" :key="b.pattern">
+                            <td>{{ b.pattern }}</td>
+                            <td class="num blue">{{ b.best_k }}</td>
+                            <td class="num pos">{{ b.best_ev }}</td>
+                            <td class="num" v-for="p in b.curve" :key="p.k">{{ p.ev }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="hint">建议 k = 该策略历史最优「第一目标相对止损的距离倍数」。例如 k=2 表示 TP1 设在距入场 2×SL 处，配合分仓（TP1 平半+保本）期望值最高。</div>
+        </div>
+
+        <!-- 逐笔结果 -->
+        <div class="card" v-if="trades.length">
+            <div class="card-head">
+                <div>
+                    <div class="card-title">⑥ 逐笔交割单（{{ filteredTrades.length }} 笔）</div>
+                </div>
+                <div class="pattern-filter-wrap" ref="viewFilterRef">
+                    <button class="btn pattern-filter-btn" @click="patternViewOpen = !patternViewOpen">
+                        {{ patternViewFilter.length ? '只看形态：已选 '+patternViewFilter.length+' 个' : '只看形态：全部' }} ▾
+                    </button>
+                    <div v-if="patternViewOpen" class="pattern-pop">
+                        <div class="pp-item pp-all" :class="{active: !patternViewFilter.length}" @click="patternViewFilter = []">全部</div>
+                        <div v-for="p in patternViewOptions" :key="p" class="pp-item"
+                             :class="{active: patternViewFilter.includes(p)}" @click="toggleViewPattern(p)">
+                            <span class="pp-check">{{ patternViewFilter.includes(p) ? '✓' : '' }}</span>{{ p }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="scroll">
+                <table>
+                    <thead><tr>
+                        <th>信号时间</th><th>周期</th><th>形态/架构</th><th>方向</th>
+                        <th class="num">入场</th><th class="num">止损</th><th class="num">TP1</th><th class="num">TP2</th>
+                        <th>结果</th><th>平仓时间</th><th class="num">平仓价</th>
+                        <th class="num">盈亏(u)</th><th class="num">R</th><th>状态</th>
+                    </tr></thead>
+                    <tbody>
+                        <tr v-for="(t,i) in filteredTrades" :key="i">
+                            <td>{{ t.signal_time }}</td>
+                            <td>{{ t.interval }}</td>
+                            <td>{{ t.pattern }}</td>
+                            <td :class="t.direction==='做多'?'pos':'neg'">{{ t.direction }}</td>
+                            <td class="num">{{ t.entry }}</td>
+                            <td class="num">{{ t.sl ?? '—' }}</td>
+                            <td class="num">{{ t.tp1 ?? '—' }}</td>
+                            <td class="num">{{ t.tp2 ?? '—' }}</td>
+                            <td>
+                                <span class="tag" :class="t.result.startsWith('SL')?'sl':(t.result.startsWith('未平仓')?'open':'tp')">{{ t.result }}</span>
+                            </td>
+                            <td>{{ t.close_time }}</td>
+                            <td class="num">{{ t.close_price }}</td>
+                            <td class="num" :class="t.pnl_u==null?'':(t.pnl_u>=0?'pos':'neg')">{{ t.pnl_u==null?(t.unrealized_final!=null?('浮'+t.unrealized_final):'—'):t.pnl_u }}</td>
+                            <td class="num">{{ t.pnl_r ?? '—' }}</td>
+                            <td>{{ t.closed?'已了结':'未平仓' }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- AI 复盘简报 -->
+        <div class="card ai-card" :class="{ streaming: aiLoading }" v-if="aiReport">
+            <div class="card-head">
+                <div>
+                    <div class="card-title">⑦ AI 复盘简报</div>
+                    <div class="card-subtitle">
+                        阿里云百炼 · 通义千问
+                        <span class="ai-stream-stat" v-if="aiLoading">· 已生成 {{ streamChars }} 字</span>
+                    </div>
+                </div>
+                <button class="btn btn-ghost copy-btn" :class="{ ok: copyOk }" @click="copyReport">
+                    {{ copyOk ? '已复制 ✓' : '📋 复制报告' }}
+                </button>
+            </div>
+            <div class="ai-report" v-html="aiReportHtml"></div>
+            <span class="ai-cursor" v-if="aiLoading" aria-hidden="true"></span>
+
+            <!-- 多轮对话面板（D1：上下文以后端 chatId 为准） -->
+            <div class="chat-panel" v-if="chatId">
+                <div class="chat-head">
+                    <span class="chat-title">💬 继续追问 · 多轮对话</span>
+                    <span class="chat-hint" v-if="chatLoading">
+                        <span class="typing"><span></span><span></span><span></span></span>
+                        AI 思考中…
+                    </span>
+                </div>
+                <div class="chat-msgs" ref="chatMsgs">
+                    <div v-for="(m, i) in chatTurns" :key="i" class="chat-msg" :class="m.role">
+                        <div class="chat-role">{{ m.role === 'user' ? '你' : 'AI' }}</div>
+                        <div class="chat-bubble ai-report" v-html="renderChatMd(m.content)"></div>
+                    </div>
+                </div>
+                <div class="chat-input">
+                    <textarea v-model="chatInput" :disabled="chatLoading" @keydown.enter.exact.prevent="sendFollowUp" placeholder="就这份复盘追问 AI，例如：把胜率最低的形态单独展开说说"></textarea>
+                    <button class="btn btn-ai" :disabled="chatLoading || !chatInput.trim()" @click="sendFollowUp">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                        发送
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const { createApp, ref, reactive, computed, onMounted, onUnmounted, nextTick } = Vue
+const SAMPLE = `2026/8/25 7:06	30m	看跌Pinbar(做空)	做空	4671.67	4674.43	4632.83	-
+2026/8/25 7:08	1m	道可DAO三要素	做多	4671.65	4653.01	4690.29	4708.93
+2026/8/25 7:24	1m	EMA100+HA回调	做多	4671.07	4670.73	4671.41	4671.75
+2026/8/25 7:24	1m	EMA100+HA回调	做多	4670.8	4670.73	4670.87	4670.94
+2026/8/25 7:25	5m	黄金孕线	做空	4674	4679.8	4668.2	4662.4
+2026/8/25 7:27	15m	看跌Pinbar(做空)	做空	4675.86	4681	4660.01	-
+2026/8/25 7:51	15m	看跌Pinbar(做空)	做空	4681.88	4689.49	4651.57	-
+2026/8/25 7:59	1m/15m	BSG + 反转FVG + SFP	做空	4633.98	4644.57	4618.1	-
+2026/8/25 8:00	15m	看跌Pinbar(做空)	做空	4683.06	4685.86	4651.57	-
+2026/8/25 8:02	1m/15m	BSG + 反转FVG + SFP	做空	4630.21	4638.97	4617.06	-
+2026/8/25 8:03	30m	看跌Pinbar(做空)	做空	4685.86	4694.1	4632.21	-
+2026/8/25 8:06	1m	EMA100+HA回调	做多	4677.52	4675.01	4680.03	4682.54
+2026/8/25 8:06	5m	张峻齐-吞没+位置	做多	4684.75	4678.79	4690.71	4696.67
+2026/8/25 8:07	5m	张峻齐-吞没+位置	做多	4686.65	4680.65	4692.65	4698.65
+2026/8/25 8:07	5m	张峻齐-吞没+位置	做多	4689.2	4683.2	4695.2	4701.2
+2026/8/25 8:15	1m/15m	BSG + SFP	做多	4630.74	4621.94	4643.93	-
+2026/8/25 8:25	15m	看跌吞没(做空)	做空	4682.53	4696.08	4651.57	-
+2026/8/25 8:27	1m	EMA100+HA回调	做多	4675.55	4674.39	4676.71	4677.87
+2026/8/25 8:29	1m/15m	BSG + 反转FVG + SFP	做空	4636.37	4653.13	4611.23	-
+2026/8/25 8:30	15m	黄金孕线	做多	4694.23	4678.98	4709.48	4724.73
+2026/8/25 8:30	30m	看跌Pinbar(做空)	做空	4685.7	4688.55	4632.21	-
+2026/8/25 8:48	1m/15m	BSG + 反转FVG + SFP	做多	4632.44	4624.87	4643.79	-
+2026/8/25 8:49	1m/15m	BSG + 反转FVG	做空	4631	4642.04	4614.44	-
+2026/8/25 8:57	1m	EMA100+HA回调	做多	4684.85	4683.77	4685.93	4687.01
+2026/8/25 9:00	15m	黄金孕线	做空	4684.49	4700.93	4668.05	4651.61
+2026/8/25 9:00	30m	看跌吞没(做空)	做空	4684.01	4691.12	4632.21	-
+2026/8/25 9:11	1m	EMA100+HA回调v2	做空	4672.16	4677.82	4666.49	4660.82
+2026/8/25 9:11	1m	EMA100+HA回调v2	做空	4672.66	4677.6	4667.71	4662.76
+2026/8/25 9:11	1m	EMA100+HA回调v2	做空	4672.66	4676.98	4668.33	4664.01
+2026/8/25 9:11	1m	EMA100+HA回调v2	做空	4672.66	4677.21	4668.11	4663.56
+2026/8/25 9:20	5m	黄金孕线	做空	4679.06	4683.76	4674.36	4669.66
+2026/8/25 11:12	1m	EMA100+HA回调	做空	4631.93	4631.94	4631.92	4631.91
+2026/8/25 11:28	1m	EMA100+HA回调	做空	4633.39	4633.58	4633.2	4633.01
+2026/8/25 11:59	4h	碟形底	做多	4626.38	4566.15	4645.36	4664.35
+2026/8/25 11:59	4h	通道(上破)	做多	4626.38	4535.48	4662.32	4698.26
+2026/8/25 11:59	4h	旗形(看涨)	做多	4626.38	4558.12	4798.6	4970.82
+2026/8/25 12:15	1m	EMA100+HA回调	做空	4632.92	4633.62	4632.22	4631.52
+2026/8/25 12:54	5m	黄金孕线	做空	4629.52	4631.06	4627.98	4626.44
+2026/8/25 13:04	5m	TD九转低九	做多	4628.58	-	-	-
+2026/8/25 13:33	1m	EMA100+HA回调	做多	4638.81	4637.17	4640.45	4642.09
+2026/8/25 13:33	1m	EMA100+HA回调	做多	4639.46	4637.17	4641.75	4644.04
+2026/8/25 13:45	1m	EMA100+HA回调	做多	4636.5	4635.04	4637.96	4639.42
+2026/8/25 13:45	1m	EMA100+HA回调	做多	4636.73	4635.04	4638.42	4640.11
+2026/8/25 13:46	1m	EMA100+HA回调v2	做多	4636.79	4634.42	4639.16	4641.53
+2026/8/25 13:46	1m	EMA100+HA回调v2	做多	4637.32	4634.3	4640.35	4643.37
+2026/8/25 13:59	15m	看跌Pinbar(做空)	做空	4643.09	4647.03	4627.27	-
+2026/8/25 14:40	1m	EMA100+HA回调	做多	4645.64	4645.3	4645.98	4646.32
+2026/8/25 14:44	15m	看跌Pinbar(做空)	做空	4654.06	4657.94	4627.27	-
+2026/8/25 14:46	1m	EMA100+HA回调	做多	4644.94	4643.2	4646.68	4648.42
+2026/8/25 14:47	1m	EMA100+HA回调v2	做多	4644.5	4642.41	4646.59	4648.67
+2026/8/25 14:50	1m	EMA100+HA回调	做多	4643.58	4643.08	4644.08	4644.58
+2026/8/25 14:59	30m	看跌Pinbar(做空)	做空	4654.08	4657.94	4628.85	-
+2026/8/25 14:59	15m	看跌Pinbar(做空)	做空	4650.67	4653.64	4627.27	-
+2026/8/25 15:07	1m	EMA100+HA回调	做空	4635.85	4637.39	4634.31	4632.77
+2026/8/25 15:09	5m	黄金孕线	做多	4644.97	4639.89	4650.05	4655.13
+2026/8/25 15:14	1m	EMA100+HA回调	做空	4636.36	4637.67	4635.05	4633.74
+2026/8/25 15:14	15m	看跌Pinbar(做空)	做空	4641.8	4644.2	4627.27	-
+2026/8/25 15:15	1m	EMA100+HA回调v2	做空	4635.97	4638.66	4633.28	4630.59
+2026/8/25 15:21	1m	EMA100+HA回调v2	做空	4637.11	4638.32	4635.91	4634.71
+2026/8/25 15:29	15m	黄金孕线	做空	4641.85	4652.44	4631.26	4620.67
+2026/8/25 15:29	15m	看跌Pinbar(做空)	做空	4643.06	4646.5	4627.27	-
+2026/8/25 15:44	15m	看跌Pinbar(做空)	做空	4638.75	4642.96	4627.27	-
+2026/8/25 15:59	15m	看跌Pinbar(做空)	做空	4643.39	4645.91	4627.27	-
+2026/8/25 16:04	5m	顶分型做空	做空	4628.86	4646.69	4611.03	4593.2
+2026/8/25 16:14	1m	EMA100+HA回调	做空	4620.29	4621.85	4618.73	4617.17
+2026/8/25 16:47	1m	EMA100+HA回调	做空	4628.28	4629.17	4627.39	4626.5
+2026/8/25 16:48	1m	EMA100+HA回调v2	做空	4627.61	4629.71	4625.5	4623.4`
+
+createApp({
+    setup() {
+        const cpText = ref('')
+        const lot = ref(0.01)
+        const startCapital = ref(200)
+        const spreadPips = ref(30)
+        const reviewEnd = ref('')
+        const timeRange = ref('all')       // 选中的时间范围 tab：'all' | 'r1' | 'r2' | 'r3'
+        const loading = ref(false)
+        const msg = ref('')
+        const tipClass = ref('')
+        const fileInput = ref(null)
+
+        const trades = ref([])
+        const strategyStats = ref([])
+        const bestRr = ref([])
+        const equity = ref([])
+        const summary = ref(null)
+        const parsedCount = ref(0)
+        const skippedCount = ref(0)
+        const filteredCount = ref(0)
+        const sortKey = ref('pattern')
+        const sortAsc = ref(true)
+        const aiReport = ref('')
+        const aiLoading = ref(false)
+        const streamChars = ref(0)
+        const streamStarted = ref(false)  // 是否收到 SSE hello 帧
+        const abortController = ref(null)
+        // 多轮对话状态（D1：chatId 以后端为准）
+        const chatId = ref(null)
+        const chatTurns = ref([])
+        const chatInput = ref('')
+        const chatLoading = ref(false)
+        const chatMsgs = ref(null)
+        const chatAbort = ref(null)
+        const renderChatMd = (txt) => renderMd(txt)
+
+        const escapeHtml = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        const renderMd = (txt) => {
+            if (!txt) return ''
+            try {
+                let html
+                if (window.marked && window.marked.parse) {
+                    html = window.marked.parse(txt)
+                } else {
+                    html = escapeHtml(txt).replace(/\n/g, '<br>')
+                }
+                return window.DOMPurify ? window.DOMPurify.sanitize(html) : html
+            } catch (e) {
+                // 解析异常（如流式中间态的残缺 Markdown）一律降级为转义纯文本，避免整页白屏
+                return escapeHtml(txt)
+            }
+        }
+        const aiReportHtml = computed(() => renderMd(aiReport.value))
+        // 时段 + 形态 切分提示：选了时段或形态时显示「已解析 X → 时段筛选后 Y → 形态筛选后 Z 条」
+        const parseHint = computed(() => {
+            if (!parsedCount.value) return ''
+            const signals = parsePaste(cpText.value)
+            let phase = signals
+            if (timeRange.value !== 'all') phase = filterByRange(phase)
+            const afterRange = phase.length
+            const afterPattern = filterByPattern(phase).length
+            if (timeRange.value !== 'all' || patternFilter.value.length) {
+                const parts = [`已解析 ${parsedCount.value} 条`]
+                if (timeRange.value !== 'all') parts.push(`时段筛选后 ${afterRange} 条（外 ${parsedCount.value - afterRange}）`)
+                if (patternFilter.value.length) parts.push(`形态筛选后 ${afterPattern} 条`)
+                return parts.join(' → ')
+            }
+            return `已解析 ${parsedCount.value} 条信号，跳过 ${skippedCount.value} 条`
+        })
+        const stripMd = (txt) => String(txt || '')
+            .replace(/^#{1,6}\s*/gm, '')
+            .replace(/\*\*([^*]+)\*\*/g, '$1')
+            .replace(/\*([^*]+)\*/g, '$1')
+            .replace(/__([^_]+)__/g, '$1')
+            .replace(/`([^`]+)`/g, '$1')
+            .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+            .replace(/^\s*[-*+]\s+/gm, '')
+            .replace(/^\s*\d+\.\s+/gm, '')
+            .replace(/^\s*>\s?/gm, '')
+        const copyOk = ref(false)
+        const lastResult = ref(null)
+
+        let equityChart = null
+
+        const sortedStats = computed(() => {
+            const arr = [...strategyStats.value]
+            arr.sort((a,b) => {
+                let x=a[sortKey.value], y=b[sortKey.value]
+                if (typeof x === 'string') return sortAsc.value ? x.localeCompare(y) : y.localeCompare(x)
+                x = x ?? -Infinity; y = y ?? -Infinity
+                return sortAsc.value ? x-y : y-x
+            })
+            return arr
+        })
+
+        const splitRow = (line) => {
+            let parts = line.split('|')
+            if (parts.length > 1 && parts[0].trim() === '') parts = parts.slice(1)
+            if (parts.length && parts[parts.length-1].trim() === '') parts = parts.slice(0, -1)
+            return parts.map(c => c.trim())
+        }
+
+        const parsePaste = (text) => {
+            const rawLines = (text||'').split(/\r?\n/).map(l=>l.trim())
+            const lines = rawLines.filter(Boolean)
+            const rows = []
+
+            const headerIdx = lines.findIndex(l => l.startsWith('|') && l.includes('信号时间'))
+            if (headerIdx !== -1) {
+                const headers = splitRow(lines[headerIdx])
+                const f = (name) => headers.findIndex(h => h.includes(name))
+                const map = {
+                    signal_time: f('信号时间'), symbol: f('品种'), interval: f('K线周期'),
+                    pattern: f('形态'), direction: f('方向'), entry: f('入场'),
+                    sl: f('止损'), tp1: f('止盈TP1'), tp2: f('止盈TP2'),
+                }
+                for (let i = headerIdx + 2; i < lines.length; i++) {
+                    const line = lines[i]
+                    if (!line.startsWith('|')) continue
+                    const cols = splitRow(line)
+                    if (cols.length < 2) continue
+                    const get = (k) => {
+                        const idx = map[k]
+                        return (idx >= 0 && cols[idx] != null) ? cols[idx] : ''
+                    }
+                    rows.push({
+                        signal_time: get('signal_time'), symbol: get('symbol'), interval: get('interval'),
+                        pattern: get('pattern'), direction: get('direction'),
+                        entry: get('entry'), sl: get('sl'), tp1: get('tp1'), tp2: get('tp2'),
+                    })
+                }
+                return rows
+            }
+
+            for (const line of lines) {
+                let cols = line.split('\t')
+                if (cols.length < 8) cols = line.split(/[,，]/)
+                if (cols.length < 8) cols = line.split(/\s+/)
+                cols = cols.map(c=>c.trim())
+                if (cols.length < 4) continue
+                rows.push({
+                    signal_time: cols[0]||'', symbol: '', interval: cols[1]||'', pattern: cols[2]||'', direction: cols[3]||'',
+                    entry: cols[4]||'', sl: cols[5]||'', tp1: cols[6]||'', tp2: cols[7]||''
+                })
+            }
+            return rows
+        }
+
+        // ---------- 信号时间整体平移（+N 分钟） ----------
+        // 只替换每行第一处日期时间（信号时间列），保持原有格式：
+        // 兼容 2026-09-21 07:01:00 / 2026/8/25 7:06 / 带秒与不带秒 / | 表格行
+        const shiftTimesInText = (text, minutes) => {
+            const re = /(\d{4})([/\-])(\d{1,2})\2(\d{1,2})(\s+)(\d{1,2}):(\d{2})(?::(\d{2}))?/
+            return (text || '').split(/\r?\n/).map(line => {
+                const m = re.exec(line)
+                if (!m) return line
+                const y = +m[1], sep = m[2], mo = +m[3], d = +m[4], ws = m[5]
+                const hh = m[6], mm = +m[7], ss = m[8]
+                const dt = new Date(y, mo - 1, d, +hh, mm, ss ? +ss : 0)
+                dt.setMinutes(dt.getMinutes() + minutes)
+                const p2 = (n) => String(n).padStart(2, '0')
+                const padDate = m[3].length === 2   // 原文月份是否补零 → 决定输出风格
+                const padHour = hh.length === 2
+                const dateStr = `${padDate ? p2(dt.getFullYear()) : dt.getFullYear()}${sep}${padDate ? p2(dt.getMonth() + 1) : (dt.getMonth() + 1)}${sep}${padDate ? p2(dt.getDate()) : dt.getDate()}`
+                const timeStr = `${padHour ? p2(dt.getHours()) : dt.getHours()}:${p2(dt.getMinutes())}${ss ? ':' + p2(dt.getSeconds()) : ''}`
+                return line.slice(0, m.index) + dateStr + ws + timeStr + line.slice(m.index + m[0].length)
+            }).join('\n')
+        }
+        const shiftSignalTime = () => { cpText.value = shiftTimesInText(cpText.value, 1) }
+
+        // ---------- 信号时段切分（time-of-day 筛选，提交回测前生效） ----------
+        // 横排 tab 定义：默认「全部时间」= 不切分，行为与旧版完全一致
+        const RANGE_TABS = [
+            { id: 'all', label: '全部时间', start: '', end: '' },
+            { id: 'r1', label: '14:00–18:00', start: '14:00', end: '18:00' },
+            { id: 'r2', label: '09:00–12:00', start: '09:00', end: '12:00' },
+            { id: 'r3', label: '20:30–22:00', start: '20:30', end: '22:00' },
+        ]
+        const toMin = (hhmm) => { const m = /^(\d{1,2}):(\d{2})$/.exec((hhmm||'').trim()); return m ? (+m[1])*60 + (+m[2]) : null }
+        const shiftMin = (signalTime) => {           // 从 signal_time 提取 HH:MM 分钟数，兼容 2026/8/25 7:06 / 2026-08-25 21:55
+            const m = /(\d{1,2}):(\d{2})/.exec(signalTime || '')
+            return m ? (+m[1])*60 + (+m[2]) : null
+        }
+        const filterByRange = (signals) => {
+            if (timeRange.value === 'all') return signals
+            const r = RANGE_TABS.find(x => x.id === timeRange.value)
+            let s = null, e = null
+            if (r) { s = toMin(r.start); e = toMin(r.end) }
+            if (s == null || e == null) return signals
+            return signals.filter(row => {
+                const m = shiftMin(row.signal_time)
+                if (m == null) return false
+                return s <= e ? (m >= s && m <= e) : (m >= s || m <= e)   // 结束<开始 → 跨午夜
+            })
+        }
+        // ---------- 形态/架构筛选（A：回测前过滤；B：⑥仅显示过滤） ----------
+        const patternFilter = ref([])             // 回测前过滤，默认空=全部形态（多选）
+        const patternOptions = computed(() => {    // 当前信号表去重后的形态列表
+            const set = new Set()
+            parsePaste(cpText.value).forEach(r => { if (r.pattern) set.add(r.pattern) })
+            return [...set].sort()
+        })
+        const filterByPattern = (signals) => {
+            if (!patternFilter.value.length) return signals          // 空=全选
+            const set = new Set(patternFilter.value)
+            return signals.filter(row => set.has(row.pattern))
+        }
+        const patternViewFilter = ref([])         // ⑥逐笔交割单仅显示过滤，默认空=全部（多选）
+        const patternViewOptions = computed(() => {
+            const set = new Set()
+            trades.value.forEach(t => { if (t.pattern) set.add(t.pattern) })
+            return [...set].sort()
+        })
+        const filteredTrades = computed(() => {
+            if (!patternViewFilter.value.length) return trades.value   // 空=全选
+            const set = new Set(patternViewFilter.value)
+            return trades.value.filter(t => set.has(t.pattern))
+        })
+        // 多选切换：A 回测前过滤、B ⑥仅显示
+        const togglePattern = (p) => {
+            const arr = patternFilter.value
+            patternFilter.value = arr.includes(p) ? arr.filter(x => x !== p) : [...arr, p]
+        }
+        const toggleViewPattern = (p) => {
+            const arr = patternViewFilter.value
+            patternViewFilter.value = arr.includes(p) ? arr.filter(x => x !== p) : [...arr, p]
+        }
+        const patternViewOpen = ref(false)        // B 下拉展开状态
+        const viewFilterRef = ref(null)           // B 下拉容器（点击外部关闭）
+        const onDocClick = (e) => {
+            if (patternViewOpen.value && viewFilterRef.value && !viewFilterRef.value.contains(e.target)) patternViewOpen.value = false
+        }
+        const fillSample = () => { cpText.value = SAMPLE; msg.value=''; tipClass.value='' }
+        const importFile = (e) => {
+            const f = e.target.files[0]; if (!f) return
+            const r = new FileReader()
+            r.onload = () => { cpText.value = String(r.result); msg.value=''; tipClass.value='' }
+            r.readAsText(f); e.target.value=''
+        }
+
+        const sortBy = (k) => { if (sortKey.value===k) sortAsc.value=!sortAsc.value; else { sortKey.value=k; sortAsc.value=true } }
+
+        const runBacktest = async () => {
+            const signals = parsePaste(cpText.value)
+            if (!signals.length) { msg.value='请先填入信号'; tipClass.value='err'; return }
+            let filtered = filterByRange(signals)
+            filtered = filterByPattern(filtered)
+            if (!filtered.length) { msg.value='该时段/形态无信号'; tipClass.value='err'; return }
+            loading.value = true; msg.value='回测中…'; tipClass.value=''
+            try {
+                const resp = await fetch('/api/backtest', {
+                    method:'POST', headers:{'Content-Type':'application/json'},
+                    body: JSON.stringify({ signals: filtered, lot:lot.value, startCapital:startCapital.value, spreadPips:spreadPips.value, reviewEnd:reviewEnd.value||null })
+                })
+                const json = await resp.json()
+                if (json.code !== 200) { msg.value = json.msg||'回测失败'; tipClass.value='err'; return }
+                trades.value = json.trades || []
+                strategyStats.value = json.strategy_stats || []
+                bestRr.value = json.best_rr || []
+                equity.value = json.equity || []
+                summary.value = json.summary || null
+                lastResult.value = json
+                parsedCount.value = signals.length; filteredCount.value = filtered.length
+                skippedCount.value = (json.skipped||[]).length
+                msg.value = `回测完成：${summary.value.total_signals} 笔，已了结 ${summary.value.closed_count}，未平仓 ${summary.value.open_count}`
+                tipClass.value = 'ok'
+                await nextTick(); renderEquity()
+            } catch (e) {
+                msg.value = '错误：' + e.message; tipClass.value='err'
+            } finally { loading.value = false }
+        }
+
+        const runBacktestBinance = async () => {
+            const signals = parsePaste(cpText.value)
+            if (!signals.length) { msg.value='请先填入信号'; tipClass.value='err'; return }
+            let filtered = filterByRange(signals)
+            filtered = filterByPattern(filtered)
+            if (!filtered.length) { msg.value='该时段/形态无信号'; tipClass.value='err'; return }
+            loading.value = true; msg.value='Binance 回测中…'; tipClass.value=''
+            try {
+                const resp = await fetch('/api/backtest/binance', {
+                    method:'POST', headers:{'Content-Type':'application/json'},
+                    body: JSON.stringify({ signals: filtered, lot:lot.value, startCapital:startCapital.value, spreadPips:spreadPips.value, reviewEnd:reviewEnd.value||null })
+                })
+                const json = await resp.json()
+                if (json.code !== 200) { msg.value = json.msg||'Binance 回测失败'; tipClass.value='err'; return }
+                trades.value = json.trades || []
+                strategyStats.value = json.strategy_stats || []
+                bestRr.value = json.best_rr || []
+                equity.value = json.equity || []
+                summary.value = json.summary || null
+                lastResult.value = json
+                parsedCount.value = signals.length; filteredCount.value = filtered.length
+                skippedCount.value = (json.skipped||[]).length
+                msg.value = `Binance 回测完成：${summary.value.total_signals} 笔，已了结 ${summary.value.closed_count}，未平仓 ${summary.value.open_count}`
+                tipClass.value = 'ok'
+                await nextTick(); renderEquity()
+            } catch (e) {
+                msg.value = '错误：' + e.message; tipClass.value='err'
+            } finally { loading.value = false }
+        }
+
+        const renderEquity = () => {
+            if (!equityChart) equityChart = echarts.init(document.getElementById('equity'))
+            const xs = equity.value.map(p=>p.date)
+            equityChart.setOption({
+                backgroundColor:'transparent',
+                tooltip:{trigger:'axis', backgroundColor:'rgba(255,255,255,0.98)', borderColor:'#ebedf0', borderWidth:1, textStyle:{color:'#1d1d1f', fontSize:12}, extraCssText:'box-shadow: 0 4px 16px rgba(0,0,0,0.08); border-radius: 8px;'},
+                legend:{data:['净值','已了结累计','浮动盈亏'],textStyle:{color:'#6e6e73'},top:0},
+                grid:{left:'3%',right:'4%',top:'14%',bottom:'8%'},
+                xAxis:{type:'category',data:xs,axisLabel:{color:'#6e6e73',fontSize:10},axisLine:{lineStyle:{color:'#e5e7eb'}}, splitLine:{show:false}},
+                yAxis:{type:'value',scale:true,axisLabel:{color:'#6e6e73'},splitLine:{lineStyle:{color:'#f0f2f5'}}, axisLine:{show:false}},
+                series:[
+                    {name:'净值',type:'line',data:equity.value.map(p=>p.equity),smooth:true,symbol:'none',itemStyle:{color:'#0a84ff'},areaStyle:{color:'rgba(10,132,255,0.10)'},lineStyle:{width:2}},
+                    {name:'已了结累计',type:'line',data:equity.value.map(p=>p.closed_sum),smooth:true,symbol:'none',itemStyle:{color:'#34c759'},lineStyle:{width:2}},
+                    {name:'浮动盈亏',type:'line',data:equity.value.map(p=>p.unrealized),smooth:true,symbol:'none',itemStyle:{color:'#ff9500'},lineStyle:{width:2}},
+                ]
+            })
+        }
+
+        const genAiReport = async () => {
+            if (!lastResult.value) { msg.value = '请先运行回测'; tipClass.value = 'err'; return }
+            aiLoading.value = true
+            aiReport.value = ''
+            streamChars.value = 0
+            streamStarted.value = false
+            msg.value = 'AI 复盘生成中…'
+            tipClass.value = ''
+
+            // 自动滚到底部（用户手动向上滚就不打扰）
+            const aiReportEl = document.querySelector('.ai-report')
+            const autoScroll = () => {
+                if (aiReportEl && aiReportEl.scrollHeight - aiReportEl.scrollTop - aiReportEl.clientHeight < 80) {
+                    aiReportEl.scrollTop = aiReportEl.scrollHeight
+                }
+            }
+
+            // 优先尝试流式（SSE），失败则降级到一次性接口
+            const tryStream = async () => {
+                const ctrl = new AbortController()
+                abortController.value = ctrl
+                console.log('[AI] 开始流式生成（POST /api/ai/summary/stream）…')
+                const t0 = Date.now()
+                const resp = await fetch('/api/ai/summary/stream', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(lastResult.value),
+                    signal: ctrl.signal,
+                })
+                console.log('[AI] SSE 连接已建立：', resp.status, resp.headers.get('content-type'))
+                if (!resp.ok || !resp.body || !resp.headers.get('content-type')?.includes('event-stream')) {
+                    throw new Error(`非流式响应：HTTP ${resp.status}`)
+                }
+                // 4 秒内收不到 hello 帧就放弃流式（防止某些代理/缓存把 SSE 当普通 HTTP 缓冲）
+                const helloTimer = setTimeout(() => {
+                    if (!streamStarted.value) {
+                        console.warn('[AI] 4 秒未收到 hello 帧，中止流式转 fallback')
+                        ctrl.abort()
+                    }
+                }, 4000)
+                const reader = resp.body.getReader()
+                const decoder = new TextDecoder('utf-8')
+                let buf = ''
+                let errored = false
+                while (true) {
+                    const { value, done } = await reader.read()
+                    if (done) break
+                    buf += decoder.decode(value, { stream: true })
+                    if (streamStarted.value) clearTimeout(helloTimer)
+                    let idx
+                    while ((idx = buf.indexOf('\n\n')) >= 0) {
+                        const evt = buf.slice(0, idx)
+                        buf = buf.slice(idx + 2)
+                        const line = evt.split('\n').find(l => l.startsWith('data:'))
+                        if (!line) continue
+                        const payload = line.slice(5).trim()
+                        if (!payload || payload === '[DONE]') continue
+                        try {
+                            const obj = JSON.parse(payload)
+                            if (obj.hello && !streamStarted.value) {
+                                console.log('[AI] 收到 hello 帧，握手成功 @' + (Date.now()-t0) + 'ms')
+                                streamStarted.value = true
+                            }
+                            if (obj.delta) {
+                                aiReport.value += obj.delta
+                                streamChars.value = aiReport.value.length
+                                nextTick(autoScroll)
+                            } else if (obj.error) {
+                                aiReport.value += `\n\n[错误] ${obj.error}`
+                                errored = true
+                                msg.value = 'AI 复盘生成失败'
+                                tipClass.value = 'err'
+                            } else if (obj.done) {
+                                if (obj.chatId) chatId.value = obj.chatId
+                                initChat()
+                                return true
+                            }
+                        } catch (_) { /* 忽略解析失败的帧 */ }
+                    }
+                }
+                return !errored
+            }
+
+            const fallbackOnce = async () => {
+                const resp = await fetch('/api/ai/summary', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(lastResult.value),
+                })
+                const json = await resp.json()
+                if (json.code !== 200) { aiReport.value = '生成失败：' + (json.msg || ''); msg.value = 'AI 复盘生成失败'; tipClass.value = 'err'; return }
+                aiReport.value = json.report || '(空)'
+                streamChars.value = aiReport.value.length
+                if (json.chatId) chatId.value = json.chatId
+                initChat()
+                msg.value = 'AI 复盘已生成'; tipClass.value = 'ok'
+            }
+
+            try {
+                await tryStream()
+                if (!aiReport.value.startsWith('[错误')) {
+                    msg.value = 'AI 复盘已生成'; tipClass.value = 'ok'
+                }
+            } catch (e) {
+                if (e.name === 'AbortError') {
+                    msg.value = '已取消'
+                } else {
+                    try { await fallbackOnce() } catch (e2) {
+                        aiReport.value = '错误：' + e2.message; tipClass.value = 'err'
+                    }
+                }
+            } finally {
+                aiLoading.value = false
+                abortController.value = null
+            }
+        }
+
+        const copyReport = async () => {
+            const text = stripMd(aiReport.value) || ''
+            if (!text) return
+            try {
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    await navigator.clipboard.writeText(text)
+                } else {
+                    const ta = document.createElement('textarea')
+                    ta.value = text
+                    ta.style.position = 'fixed'
+                    ta.style.opacity = '0'
+                    document.body.appendChild(ta)
+                    ta.select()
+                    document.execCommand('copy')
+                    document.body.removeChild(ta)
+                }
+                copyOk.value = true
+                setTimeout(() => copyOk.value = false, 1500)
+            } catch (e) {
+                msg.value = '复制失败：' + e.message
+                tipClass.value = 'err'
+            }
+        }
+
+        const initChat = () => {
+            chatTurns.value = [{ role: 'assistant', content: aiReport.value }]
+        }
+
+        const sendFollowUp = async () => {
+            const q = (chatInput.value || '').trim()
+            if (!q || chatLoading.value || !chatId.value) return
+            chatLoading.value = true
+            chatTurns.value.push({ role: 'user', content: q })
+            chatInput.value = ''
+            const tmp = reactive({ role: 'assistant', content: '' })
+            chatTurns.value.push(tmp)
+            await nextTick()
+            // 仅当用户已贴近底部时才自动跟随，避免 AI 生成时把正在阅读的聊天框拽到底部
+            const scroll = () => {
+                const el = chatMsgs.value
+                if (el && el.scrollHeight - el.scrollTop - el.clientHeight < 80) {
+                    el.scrollTop = el.scrollHeight
+                }
+            }
+            scroll()
+            const tryStream = async () => {
+                const ctrl = new AbortController()
+                chatAbort.value = ctrl
+                const resp = await fetch('/api/ai/chat/stream', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ chatId: chatId.value, userText: q }),
+                    signal: ctrl.signal,
+                })
+                if (!resp.ok || !resp.body || !resp.headers.get('content-type')?.includes('event-stream')) {
+                    throw new Error(`非流式响应：HTTP ${resp.status}`)
+                }
+                let gotHello = false
+                const helloTimer = setTimeout(() => { if (!gotHello) { console.warn('[Chat] 4s 无 hello，转 fallback'); ctrl.abort() } }, 4000)
+                const reader = resp.body.getReader()
+                const decoder = new TextDecoder('utf-8')
+                let buf = ''
+                while (true) {
+                    const { value, done } = await reader.read()
+                    if (done) break
+                    buf += decoder.decode(value, { stream: true })
+                    if (gotHello) clearTimeout(helloTimer)
+                    let idx
+                    while ((idx = buf.indexOf('\n\n')) >= 0) {
+                        const evt = buf.slice(0, idx); buf = buf.slice(idx + 2)
+                        const line = evt.split('\n').find(l => l.startsWith('data:'))
+                        if (!line) continue
+                        const payload = line.slice(5).trim()
+                        if (!payload || payload === '[DONE]') continue
+                        try {
+                            const obj = JSON.parse(payload)
+                            if (obj.hello) { gotHello = true; clearTimeout(helloTimer) }
+                            else if (obj.delta) { tmp.content += obj.delta; nextTick(scroll) }
+                            else if (obj.error) { tmp.content += `\n\n[错误] ${obj.error}`; msg.value = '追问失败'; tipClass.value = 'err' }
+                        } catch (_) { /* 忽略解析失败帧 */ }
+                    }
+                }
+                return true
+            }
+            const fallbackOnce = async () => {
+                const resp = await fetch('/api/ai/chat', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ chatId: chatId.value, userText: q }),
+                })
+                const json = await resp.json()
+                if (json.code !== 200) { tmp.content = '追问失败：' + (json.msg || ''); msg.value = '追问失败'; tipClass.value = 'err'; return }
+                tmp.content = json.answer || '(空)'
+                nextTick(scroll)
+            }
+            try {
+                await tryStream()
+            } catch (e) {
+                try { await fallbackOnce() } catch (e2) { tmp.content = '错误：' + e2.message; msg.value = '追问失败'; tipClass.value = 'err' }
+            } finally {
+                chatLoading.value = false
+                chatAbort.value = null
+            }
+        }
+
+        onMounted(() => { window.addEventListener('resize', () => equityChart && equityChart.resize()); document.addEventListener('click', onDocClick) })
+        onUnmounted(() => { if (chatAbort.value) { try { chatAbort.value.abort() } catch (_) {} } document.removeEventListener('click', onDocClick) })
+
+        return {
+            cpText, lot, startCapital, spreadPips, reviewEnd, loading, msg, tipClass, fileInput, shiftSignalTime,
+            timeRange, RANGE_TABS, parseHint, patternFilter, patternOptions, patternViewFilter, patternViewOptions, filteredTrades, togglePattern, toggleViewPattern, patternViewOpen, viewFilterRef,
+            trades, strategyStats, bestRr, equity, summary, parsedCount, skippedCount,
+            aiReport, aiReportHtml, aiLoading, streamChars, copyOk, genAiReport, copyReport,
+            sortedStats, fillSample, importFile, sortBy, runBacktest, runBacktestBinance,
+            chatId, chatTurns, chatInput, chatLoading, chatMsgs, sendFollowUp, renderChatMd,
+        }
+    },
+}).mount('#app')
+</script>
+
+<script>
+// ========== 数据同步（顶栏按钮，全局） ==========
+(function () {
+    const syncPanel = document.getElementById('syncPanel')
+    const syncLogs = document.getElementById('syncLogs')
+    const syncElapsed = document.getElementById('syncElapsed')
+    const syncStatusTag = document.getElementById('syncStatusTag')
+    const syncDbBtn = document.getElementById('syncDbBtn')
+    const syncDataBtn = document.getElementById('syncDataBtn')
+    const syncDbDot = document.getElementById('syncDbDot')
+    const syncDataDot = document.getElementById('syncDataDot')
+    const syncClearBtn = document.getElementById('syncClearBtn')
+    const syncCloseBtn = document.getElementById('syncCloseBtn')
+
+    let pollTimer = null
+    let pollStart = 0
+    let lastLogCount = 0
+
+    const openPanel = () => syncPanel.classList.add('open')
+    const closePanel = () => syncPanel.classList.remove('open')
+    syncCloseBtn.addEventListener('click', closePanel)
+    syncClearBtn.addEventListener('click', () => { syncLogs.innerHTML = ''; lastLogCount = 0 })
+
+    const setDots = (status) => {
+        const clsIdle = 'idle', clsRun = 'running', clsDone = 'done', clsErr = 'error'
+        const syncDbDot = document.getElementById('syncDbDot')
+        const syncDataDot = document.getElementById('syncDataDot')
+        const setDot = (el, cls) => { if (el) el.className = 'sync-dot ' + cls }
+        if (status.running) {
+            setDot(status.task === 'data' ? syncDataDot : syncDbDot, clsRun)
+            setDot(status.task === 'db' ? syncDataDot : syncDbDot, clsIdle)
+        } else if (status.finished_at) {
+            const ok = !status.summary || !status.summary.error
+            setDot(syncDbDot, clsIdle); setDot(syncDataDot, clsIdle)
+            if (status.task === 'data') setDot(syncDataDot, ok ? clsDone : clsErr)
+            else if (status.task === 'db') setDot(syncDbDot, ok ? clsDone : clsErr)
+        } else { setDot(syncDbDot, clsIdle); setDot(syncDataDot, clsIdle) }
+    }
+
+    const setStatusText = (status) => {
+        let label = '空闲', cls = 'idle'
+        if (status.running) { label = status.task === 'data' ? '正在抓取 K线' : '正在建表'; cls = 'running' }
+        else if (status.finished_at) {
+            const ok = !status.summary || !status.summary.error
+            label = ok ? '已完成' : '失败'; cls = ok ? 'done' : 'error'
+        }
+        syncStatusTag.className = 'sync-status-tag ' + cls
+        syncStatusTag.innerHTML = `<span class="sync-dot ${cls}"></span><span>${label}</span>`
+    }
+
+    const appendLogs = (logs) => {
+        if (!logs || logs.length === lastLogCount) return
+        const frag = document.createDocumentFragment()
+        for (let i = lastLogCount; i < logs.length; i++) {
+            const l = logs[i]
+            const row = document.createElement('div')
+            row.className = 'log-line ' + (l.level || 'info')
+            const t = document.createElement('span'); t.className = 'log-time'; t.textContent = l.time
+            const m = document.createElement('span'); m.className = 'log-msg'; m.textContent = l.msg
+            row.appendChild(t); row.appendChild(m)
+            frag.appendChild(row)
+        }
+        syncLogs.appendChild(frag)
+        syncLogs.scrollTop = syncLogs.scrollHeight
+        lastLogCount = logs.length
+    }
+
+    const tickElapsed = () => {
+        if (!pollStart) { syncElapsed.textContent = '--:--'; return }
+        const sec = Math.floor((Date.now() - pollStart) / 1000)
+        syncElapsed.textContent = `${String(Math.floor(sec/60)).padStart(2,'0')}:${String(sec%60).padStart(2,'0')}`
+    }
+
+    const pollStatus = async () => {
+        try {
+            const res = await fetch('/api/sync/status')
+            const json = await res.json()
+            const s = json.data || {}
+            if (s.running) {
+                if (!pollStart) pollStart = new Date(s.started_at || Date.now()).getTime()
+                tickElapsed()
+            } else {
+                pollStart = 0; tickElapsed()
+                if (pollTimer) { clearInterval(pollTimer); pollTimer = null }
+                syncDbBtn.disabled = false; syncDataBtn.disabled = false
+            }
+            setDots(s); setStatusText(s); appendLogs(s.logs || [])
+        } catch (e) { /* 静默 */ }
+    }
+
+    const startPolling = () => {
+        if (pollTimer) return
+        pollTimer = setInterval(pollStatus, 1500)
+        pollStatus()
+    }
+
+    syncDbBtn.addEventListener('click', async () => {
+        openPanel(); syncDbBtn.disabled = true; syncDataBtn.disabled = true
+        syncLogs.innerHTML = ''; lastLogCount = 0
+        try {
+            const res = await fetch('/api/sync/db', { method: 'POST' })
+            const json = await res.json()
+            if (json.code !== 200) {
+                alert('同步数据库失败：' + (json.msg || '未知错误'))
+                syncDbBtn.disabled = false; syncDataBtn.disabled = false
+            } else { pollStatus() }
+        } catch (e) {
+            alert('请求失败：' + e.message)
+            syncDbBtn.disabled = false; syncDataBtn.disabled = false
+        }
+    })
+
+    syncDataBtn.addEventListener('click', async () => {
+        openPanel()
+        syncLogs.innerHTML = '<div class="log-line info"><span class="log-time">--:--</span><span class="log-msg">⏳ 正在启动后台任务...</span></div>'
+        lastLogCount = 0
+        syncDbBtn.disabled = true; syncDataBtn.disabled = true
+        try {
+            const res = await fetch('/api/sync/data', { method: 'POST' })
+            const json = await res.json()
+            if (json.code !== 200) {
+                alert('启动同步失败：' + (json.msg || '未知错误'))
+                syncDbBtn.disabled = false; syncDataBtn.disabled = false
+            } else { startPolling() }
+        } catch (e) {
+            alert('请求失败：' + e.message)
+            syncDbBtn.disabled = false; syncDataBtn.disabled = false
+        }
+    })
+
+    pollStatus()
+})()
+</script>
+<script src="/static/components/topnav.js" defer></script></body>
+</html>

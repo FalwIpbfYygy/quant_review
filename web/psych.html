@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>心锚 · Composure</title>
+    <link rel="stylesheet" href="/static/components/topnav.css">
+    <script src="/vendors/vue.global.prod.js"></script>
+    <style>
+        :root{
+            --bg:#f0f2f7; --panel:#ffffff; --panel-2:#fafbfc; --border:#ebedf0; --border-soft:#f0f2f5;
+            --text:#1d1d1f; --text-2:#424245; --text-muted:#6e6e73;
+            --accent:#0a84ff; --accent-2:#0066cc; --accent-soft:#e8f1ff;
+            --green:#34c759; --red:#ff3b30; --orange:#ff9500; --purple:#af52de; --teal:#0ab0a0;
+            --shadow-sm:0 1px 2px rgba(0,0,0,0.04);
+            --shadow:0 1px 3px rgba(0,0,0,0.04),0 4px 12px rgba(0,0,0,0.04);
+            --radius:16px; --radius-sm:10px; --radius-pill:999px;
+            --font:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",system-ui,sans-serif;
+        }
+        *{margin:0;padding:0;box-sizing:border-box;}
+        body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:13px;line-height:1.5;-webkit-font-smoothing:antialiased;}
+        .topnav{min-height:56px;height:auto;flex-wrap:wrap;background:#fff;border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 24px;gap:12px;position:sticky;top:0;z-index:100;}
+        .content{padding:18px 24px 40px;display:flex;flex-direction:column;gap:14px;max-width:1080px;margin:0 auto;}
+        .page-heading{font-size:20px;font-weight:600;letter-spacing:-.2px;}
+        .page-sub{font-size:13px;color:var(--text-muted);margin-top:2px;}
+        .card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-sm);padding:16px 18px;}
+        .card-title{font-size:14px;font-weight:600;display:flex;align-items:center;gap:8px;margin-bottom:12px;}
+        .card-title .accent-bar{width:3px;height:15px;border-radius:2px;background:var(--purple);}
+        .card-title .ico{font-size:15px;}
+
+        .seg{display:inline-flex;background:#f0f2f5;border-radius:var(--radius-pill);padding:3px;gap:2px;}
+        .seg button{padding:6px 16px;border:none;background:transparent;color:var(--text-muted);border-radius:var(--radius-pill);cursor:pointer;font-size:13px;font-family:inherit;transition:all .15s;font-weight:500;}
+        .seg button:hover{color:var(--text);}
+        .seg button.active{background:#fff;color:var(--text);box-shadow:0 1px 2px rgba(0,0,0,0.06);}
+
+        label.fld{display:block;font-size:12.5px;color:var(--text-muted);margin:10px 0 5px;}
+        input[type=text],input[type=number],textarea,select{padding:8px 11px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;background:var(--panel-2);color:var(--text);width:100%;font-family:inherit;transition:border-color .15s,box-shadow .15s;}
+        textarea{resize:vertical;min-height:64px;}
+        input:focus,textarea:focus,select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(10,132,255,0.15);}
+        .row{display:flex;gap:12px;flex-wrap:wrap;}
+        .row > .col{flex:1;min-width:120px;}
+        .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+
+        .btn{padding:8px 16px;border-radius:var(--radius-pill);border:none;cursor:pointer;font-size:13px;font-family:inherit;font-weight:500;transition:all .15s;display:inline-flex;align-items:center;gap:6px;line-height:1.2;}
+        .btn-primary{background:var(--text);color:#fff;}
+        .btn-primary:hover{background:#000;transform:translateY(-1px);}
+        .btn-primary:disabled{background:#d1d5db;color:#9ca3af;cursor:not-allowed;transform:none;}
+        .btn-accent{background:var(--accent);color:#fff;}
+        .btn-accent:hover{background:var(--accent-2);}
+        .btn-ghost{background:transparent;color:var(--text-muted);}
+        .btn-ghost:hover{background:#f0f2f5;color:var(--text);}
+        .btn-purple{background:var(--purple);color:#fff;}
+        .btn-purple:hover{background:#9b3fc9;}
+        .btn-soft{background:#f0f2f5;color:var(--text);}
+        .btn-soft:hover{background:#e5e7eb;}
+        .btn-danger{background:var(--red);color:#fff;}
+        .btn-danger:hover{background:#e02d24;}
+
+        .check{display:flex;align-items:center;gap:10px;padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:8px;cursor:pointer;transition:all .15s;background:var(--panel-2);}
+        .check:hover{border-color:#d9dbe0;}
+        .check.on{border-color:var(--green);background:#f0fbf3;}
+        .check .box{width:18px;height:18px;border-radius:5px;border:2px solid #c7cad1;flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:all .15s;color:#fff;font-size:12px;}
+        .check.on .box{background:var(--green);border-color:var(--green);}
+        .check .txt{font-size:13px;}
+
+        .warn-bar{background:#fff4f3;border:1px solid #ffd9d6;color:#c0392b;border-radius:var(--radius-sm);padding:10px 12px;font-size:12.5px;margin-top:10px;display:flex;align-items:center;gap:8px;}
+        .ok-bar{background:#f0fbf3;border:1px solid #c8eccf;color:#1e7d33;border-radius:var(--radius-sm);padding:10px 12px;font-size:12.5px;margin-top:10px;}
+
+        .pill{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:var(--radius-pill);font-size:11.5px;font-weight:600;}
+        .pill.pre{background:var(--accent-soft);color:var(--accent);}
+        .pill.in{background:#f3ecfb;color:var(--purple);}
+        .pill.post{background:#e8f8f2;color:var(--teal);}
+
+        .stat-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;}
+        .stat-box{background:var(--panel-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;text-align:center;}
+        .stat-num{font-size:22px;font-weight:700;letter-spacing:-.5px;}
+        .stat-num.purple{color:var(--purple);} .stat-num.red{color:var(--red);} .stat-num.green{color:var(--green);} .stat-num.accent{color:var(--accent);}
+        .stat-label{font-size:11.5px;color:var(--text-muted);margin-top:3px;}
+
+        .anchor-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:6px;}
+        .anchor-cell{background:var(--panel-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;text-align:center;}
+        .anchor-cell .v{font-size:18px;font-weight:700;}
+        .anchor-cell .k{font-size:11px;color:var(--text-muted);margin-top:3px;}
+        .anchor-cell .v.green{color:var(--green);} .anchor-cell .v.red{color:var(--red);}
+
+        .reframe{background:linear-gradient(135deg,#faf5ff,#eef6ff);border:1px solid #e3d9f5;border-radius:var(--radius-sm);padding:14px;font-size:13px;line-height:1.65;color:var(--text-2);}
+        .reframe b{color:var(--purple);}
+
+        .urge-banner{background:#fff7ed;border:1px solid #fed7aa;color:#b45309;border-radius:var(--radius-sm);padding:12px 14px;font-size:13px;line-height:1.6;margin-top:12px;animation:fadeIn .3s;}
+        @keyframes fadeIn{from{opacity:0;transform:translateY(-4px);}to{opacity:1;transform:translateY(0);}}
+
+        .urge-chip{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;background:#f3ecfb;color:var(--purple);border-radius:var(--radius-pill);font-size:12px;margin:4px 4px 0 0;}
+        .urge-chip .t{opacity:.6;font-family:Consolas,monospace;}
+
+        .rec-item{border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:10px;display:flex;gap:12px;align-items:flex-start;}
+        .rec-main{flex:1;min-width:0;}
+        .rec-time{font-size:11.5px;color:var(--text-muted);font-family:Consolas,monospace;}
+        .rec-sum{font-size:13px;margin-top:4px;color:var(--text-2);}
+        .rec-del{flex-shrink:0;}
+
+        .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--text);color:#fff;padding:10px 18px;border-radius:var(--radius-pill);font-size:13px;box-shadow:var(--shadow);z-index:300;animation:fadeIn .2s;}
+        .tip{font-size:12.5px;color:var(--text-muted);}
+        .muted{color:var(--text-muted);}
+        .mt8{margin-top:8px;} .mt12{margin-top:12px;} .mt16{margin-top:16px;}
+
+        /* ===== 呼吸覆盖层 ===== */
+        .breath-overlay{position:fixed;inset:0;background:rgba(20,18,32,0.55);backdrop-filter:blur(6px);z-index:400;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;animation:fadeIn .3s;}
+        .breath-label{color:#fff;font-size:22px;font-weight:600;letter-spacing:2px;height:30px;}
+        .breath-count{color:rgba(255,255,255,0.85);font-size:15px;font-variant-numeric:tabular-nums;}
+        .breath-circle{width:240px;height:240px;border-radius:50%;background:radial-gradient(circle at 50% 40%,#c8a8f0,#7c3aed);box-shadow:0 0 80px rgba(124,58,237,0.5);transform:scale(0.45);transform-origin:center;transition:transform 4s ease-in-out;}
+        .breath-ring{position:absolute;width:300px;height:300px;border-radius:50%;border:1px solid rgba(255,255,255,0.25);}
+        .breath-wrap{position:relative;width:300px;height:300px;display:flex;align-items:center;justify-content:center;}
+    </style>
+</head>
+<body>
+<header class="topnav">
+    <topnav-bar class="topnav-links" data-active="/psych"></topnav-bar>
+</header>
+
+<div id="app">
+    <div class="content">
+        <div>
+            <h1 class="page-heading">🧠 心锚 · Composure</h1>
+            <div class="page-sub">交易心理陪伴模块 · 下单前定心 / 下单中急救 / 下单后复盘 — 让你当下冷静下来</div>
+        </div>
+
+        <!-- 统计仪表盘 -->
+        <div class="card">
+            <div class="card-title"><span class="accent-bar"></span><span class="ico">📊</span>情绪账本总览</div>
+            <div class="stat-grid">
+                <div class="stat-box"><div class="stat-num">{{ stats.total }}</div><div class="stat-label">总记录</div></div>
+                <div class="stat-box"><div class="stat-num purple">{{ stats.discipline_avg ?? '—' }}</div><div class="stat-label">纪律分均值</div></div>
+                <div class="stat-box"><div class="stat-num red">{{ stats.premature_close }}</div><div class="stat-label">提前平仓次数</div></div>
+                <div class="stat-box"><div class="stat-num red">{{ stats.missed_profit_sum }}u</div><div class="stat-label">累计情绪税</div></div>
+                <div class="stat-box"><div class="stat-num orange">{{ stats.urge_total }}</div><div class="stat-label">冲动次数</div></div>
+            </div>
+            <div class="tip mt8" v-if="stats.top_emotions && Object.keys(stats.top_emotions).length">高频情绪：<span v-for="(c,e) in stats.top_emotions" :key="e" class="urge-chip">{{ e }} ×{{ c }}</span></div>
+        </div>
+
+        <!-- Tab 切换 -->
+        <div class="seg">
+            <button :class="{active: tab==='pre'}" @click="tab='pre'">① 下单前 · 定心</button>
+            <button :class="{active: tab==='in'}" @click="tab='in'">② 下单中 · 急救</button>
+            <button :class="{active: tab==='post'}" @click="tab='post'">③ 下单后 · 复盘</button>
+        </div>
+
+        <!-- ============ 下单前 ============ -->
+        <div v-show="tab==='pre'">
+            <div class="grid2">
+                <div class="card">
+                    <div class="card-title"><span class="accent-bar"></span><span class="ico">🩺</span>身体扫描（30s）</div>
+                    <label class="fld">紧张/焦虑程度（1 最放松 → 10 最慌）</label>
+                    <input type="range" min="1" max="10" v-model.number="preForm.tension" style="width:100%">
+                    <div class="tip">当前：{{ preForm.tension }} / 10 <span v-if="preForm.tension>=7" style="color:var(--red)">⚠ 偏高，建议先做呼吸</span></div>
+                    <label class="fld">心率感受</label>
+                    <div class="seg">
+                        <button :class="{active: preForm.heart==='normal'}" @click="preForm.heart='normal'">正常</button>
+                        <button :class="{active: preForm.heart==='fast'}" @click="preForm.heart='fast'">偏快</button>
+                        <button :class="{active: preForm.heart==='racing'}" @click="preForm.heart='racing'">扑腾跳</button>
+                    </div>
+                    <label class="fld">此刻身体感受（可选）</label>
+                    <textarea v-model="preForm.breathNote" placeholder="手抖/呼吸急促/腿软/胃部紧绷…把感受写下来，先看见它"></textarea>
+                </div>
+
+                <div class="card">
+                    <div class="card-title"><span class="accent-bar"></span><span class="ico">✅</span>交易前清单</div>
+                    <div class="check" :class="{on: preForm.checklist.plan}" @click="preForm.checklist.plan=!preForm.checklist.plan">
+                        <span class="box">{{ preForm.checklist.plan ? '✓' : '' }}</span><span class="txt">计划清晰（方向/入场/SL/TP 都写明了）</span>
+                    </div>
+                    <div class="check" :class="{on: preForm.checklist.sl}" @click="preForm.checklist.sl=!preForm.checklist.sl">
+                        <span class="box">{{ preForm.checklist.sl ? '✓' : '' }}</span><span class="txt">止损已设且可接受最大亏损</span>
+                    </div>
+                    <div class="check" :class="{on: preForm.checklist.noRevenge}" @click="preForm.checklist.noRevenge=!preForm.checklist.noRevenge">
+                        <span class="box">{{ preForm.checklist.noRevenge ? '✓' : '' }}</span><span class="txt">非报复交易（上一笔已平，没带情绪追）</span>
+                    </div>
+                    <div class="check" :class="{on: preForm.checklist.state}" @click="preForm.checklist.state=!preForm.checklist.state">
+                        <span class="box">{{ preForm.checklist.state ? '✓' : '' }}</span><span class="txt">身心状态良好（没熬夜/没醉酒/没大事分心）</span>
+                    </div>
+                    <div v-if="preChecklistPass" class="ok-bar">✅ 四项全过，可以准备入场</div>
+                    <div v-else class="warn-bar">⛔ 有未过项 → 强制停 60 秒，先跟我呼吸冷静再决定</div>
+                    <div class="row mt12">
+                        <button class="btn btn-purple" @click="startBreath(preForm.breathMode, preForm.breathRounds)">🫁 跟我呼吸 {{ preForm.breathMode==='478'?'4-7-8':'4-4-4-4' }}</button>
+                    </div>
+                    <label class="fld">呼吸节奏（两档可切换）</label>
+                    <div class="seg">
+                        <button :class="{active: preForm.breathMode==='478'}" @click="preForm.breathMode='478'">4-7-8（焦虑急救）</button>
+                        <button :class="{active: preForm.breathMode==='4444'}" @click="preForm.breathMode='4444'">4-4-4-4（方箱）</button>
+                    </div>
+                </div>
+            </div>
+            <div class="card mt16">
+                <button class="btn btn-primary" @click="savePre" :disabled="saving">💾 保存「下单前」记录</button>
+                <span class="tip ml12">保存后会出现在下方历史；勾选/数值会被完整记录，便于回看你的状态演变</span>
+            </div>
+        </div>
+
+        <!-- ============ 下单中 ============ -->
+        <div v-show="tab==='in'">
+            <div class="card">
+                <div class="card-title"><span class="accent-bar"></span><span class="ico">🧭</span>计划锚（把慌拉回数字）</div>
+                <div class="row">
+                    <div class="col"><label class="fld">品种</label><input type="text" v-model="inForm.symbol" placeholder=""></div>
+                    <div class="col"><label class="fld">方向</label>
+                        <div class="seg">
+                            <button :class="{active: inForm.direction==='多'}" @click="inForm.direction='多'">做多</button>
+                            <button :class="{active: inForm.direction==='空'}" @click="inForm.direction='空'">做空</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="row mt8">
+                    <div class="col"><label class="fld">入场价</label><input type="number" v-model="inForm.entry" placeholder="4300"></div>
+                    <div class="col"><label class="fld">止损 SL</label><input type="number" v-model="inForm.sl" placeholder="4295"></div>
+                    <div class="col"><label class="fld">止盈 TP1</label><input type="number" v-model="inForm.tp1" placeholder="4310"></div>
+                </div>
+                <div v-if="planAnchor" class="anchor-grid">
+                    <div class="anchor-cell"><div class="v green">{{ planAnchor.distTP }}</div><div class="k">距 TP1（点）</div></div>
+                    <div class="anchor-cell"><div class="v red">{{ planAnchor.distSL }}</div><div class="k">距 SL（点）</div></div>
+                    <div class="anchor-cell"><div class="v">{{ planAnchor.r }}</div><div class="k">R 倍数</div></div>
+                    <div class="anchor-cell"><div class="v">{{ planAnchor.be }}</div><div class="k">移保本线</div></div>
+                </div>
+                <div class="tip mt8" v-if="planAnchor">注意力放这里：计划是「拿到 TP1 平半 + 移保本」。最坏已限定在 SL。</div>
+            </div>
+
+            <div class="grid2 mt16">
+                <div class="card">
+                    <div class="card-title"><span class="accent-bar"></span><span class="ico">🪞</span>偏差镜子（手痒时点）</div>
+                    <div class="tip">当你「想提前平仓 / 想改 SL / 一直刷新」时，点对应按钮——把冲动记下来，并看清你正犯的错。</div>
+                    <div class="row mt12">
+                        <button class="btn btn-soft" @click="logUrge('close')">😰 我想提前平仓了</button>
+                        <button class="btn btn-soft" @click="logUrge('modify_sl')">✋ 我想改/移 SL</button>
+                        <button class="btn btn-soft" @click="logUrge('refresh')">🔄 我一直在刷新</button>
+                    </div>
+                    <div v-if="inForm.urgeEvents.length" class="mt12">
+                        <span class="tip">本次冲动记录：</span>
+                        <div>
+                            <span v-for="(u,i) in inForm.urgeEvents" :key="i" class="urge-chip">{{ u.label }}<span class="t">{{ u.at }}</span></span>
+                        </div>
+                    </div>
+                    <div v-if="urgeToast" class="urge-banner">
+                        ⚠️ 你在犯<strong>处置效应</strong>——大脑讨厌不确定，持仓不耐烦会让你 premature close。计划是拿到 TP1。<br>
+                        你历史已 <strong>{{ stats.premature_close }}</strong> 次提前平仓，累计情绪税 <strong>{{ stats.missed_profit_sum }}u</strong>。别让恐惧再吃一笔。
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-title"><span class="accent-bar"></span><span class="ico">🫁</span>生理急救 & 锁死</div>
+                    <div class="tip">强烈焦虑（心脏扑腾跳/手抖/呼吸急促）时，跟我呼吸 60 秒降皮质醇。</div>
+                    <div class="row mt12">
+                        <button class="btn btn-purple" @click="startBreath(inForm.lockMode, inForm.lockRounds)">🫁 生理急救呼吸</button>
+                        <button class="btn btn-accent" @click="lockNow">🧊 锁死 {{ inForm.lockMin }} 分钟不动</button>
+                    </div>
+                    <label class="fld mt12">呼吸节奏</label>
+                    <div class="seg">
+                        <button :class="{active: inForm.lockMode==='478'}" @click="inForm.lockMode='478'">4-7-8</button>
+                        <button :class="{active: inForm.lockMode==='4444'}" @click="inForm.lockMode='4444'">4-4-4-4</button>
+                    </div>
+                    <label class="fld">锁定时长（分钟）</label>
+                    <input type="number" v-model.number="inForm.lockMin" min="1" max="30" style="width:120px">
+                </div>
+            </div>
+
+            <div class="card mt16">
+                <div class="card-title"><span class="accent-bar"></span><span class="ico">🧠</span>认知重构卡</div>
+                <div class="reframe">
+                    你此刻「行情不跟我走了、必须现在平仓」的<strong>强烈确定性，是杏仁核劫持（amygdala hijack）的症状，不是市场洞察</strong>。<br>
+                    压力下大脑会制造「我终于看清了真相」的虚假确定性——这正是恐惧在说话。止损已锁死，最坏亏损已被限定。把注意力拉回上方「计划锚」的数字，而不是盘面的跳动。
+                </div>
+            </div>
+
+            <div class="card mt16">
+                <label class="fld">本次持仓备注（可选）</label>
+                <textarea v-model="inForm.lockNote" placeholder="现在价格在 XX，距 TP1 还有 XX 点，按计划在拿"></textarea>
+                <div class="mt12">
+                    <button class="btn btn-primary" @click="saveIn" :disabled="saving">💾 保存「下单中」记录</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============ 下单后 ============ -->
+        <div v-show="tab==='post'">
+            <div class="card">
+                <div class="card-title"><span class="accent-bar"></span><span class="ico">🔁</span>认知重评</div>
+                <div class="reframe">
+                    平仓后「太早止盈 / 没拿住」的懊悔，是<strong>事后偏差</strong>——你只看到结果，忘了当时恐惧的真实性。<br>
+                    把这笔的「实际 vs 如果按计划」差额记下来：那不是你笨，是<strong>情绪税</strong>。量化它，下次它就更难操控你。
+                </div>
+            </div>
+
+            <div class="card mt16">
+                <div class="card-title"><span class="accent-bar"></span><span class="ico">📝</span>交易后记录</div>
+                <div class="row">
+                    <div class="col"><label class="fld">结果</label>
+                        <div class="seg">
+                            <button :class="{active: postForm.outcome==='tp1'}" @click="postForm.outcome='tp1'">TP1</button>
+                            <button :class="{active: postForm.outcome==='tp2'}" @click="postForm.outcome='tp2'">TP2</button>
+                            <button :class="{active: postForm.outcome==='sl'}" @click="postForm.outcome='sl'">SL</button>
+                            <button :class="{active: postForm.outcome==='manual'}" @click="postForm.outcome='manual'">手动平</button>
+                        </div>
+                    </div>
+                    <div class="col"><label class="fld">平仓时情绪</label><input type="text" v-model="postForm.emotion" placeholder="焦虑/平静/后悔/得意…"></div>
+                </div>
+                <div class="check mt12" :class="{on: postForm.premature}" @click="postForm.premature=!postForm.premature">
+                    <span class="box">{{ postForm.premature ? '✓' : '' }}</span><span class="txt">这笔属于「提前止盈 / 没拿住」（被恐惧提前平仓）</span>
+                </div>
+                <div class="row mt8">
+                    <div class="col"><label class="fld">因恐惧少赚 / 多亏（u，正为少赚）</label><input type="number" v-model="postForm.missedProfit" placeholder="例如 25"></div>
+                    <div class="col"><label class="fld">纪律分（1 没守住 → 10 完全按计划）</label>
+                        <input type="range" min="1" max="10" v-model.number="postForm.discipline" style="width:100%;margin-top:10px">
+                        <div class="tip">当前：{{ postForm.discipline }} / 10</div>
+                    </div>
+                </div>
+                <label class="fld">复盘笔记</label>
+                <textarea v-model="postForm.note" placeholder="这次慌在哪一刻？下次计划锚里哪个数字能拉住我？"></textarea>
+                <div class="mt12">
+                    <button class="btn btn-primary" @click="savePost" :disabled="saving">💾 保存「下单后」记录</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 历史 -->
+        <div class="card mt16">
+            <div class="card-title"><span class="accent-bar"></span><span class="ico">🗂️</span>历史记录
+                <button class="btn btn-ghost ml12" style="margin-left:auto" @click="refresh">↻ 刷新</button>
+            </div>
+            <div v-if="!records.length" class="tip">暂无记录。从上面任一场景保存后会出现在这里。</div>
+            <div v-for="r in records" :key="r.id" class="rec-item">
+                <span class="pill" :class="r.scenario">{{ r.scenario==='pre'?'下单前':r.scenario==='in'?'下单中':'下单后' }}</span>
+                <div class="rec-main">
+                    <div class="rec-time">{{ r.created_at }}</div>
+                    <div class="rec-sum">{{ summarize(r) }}</div>
+                </div>
+                <button class="btn btn-ghost rec-del" @click="delRecord(r.id)">删除</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 呼吸覆盖层 -->
+    <div class="breath-overlay" v-if="breath.active">
+        <div class="breath-label">{{ breath.label }}</div>
+        <div class="breath-wrap">
+            <div class="breath-ring"></div>
+            <div class="breath-circle" :style="{ transform: 'scale('+breath.scale+')', transition: 'transform '+breath.dur+'s ease-in-out' }"></div>
+        </div>
+        <div class="breath-count">第 {{ breath.roundsTotal - breath.roundsLeft + 1 }} / {{ breath.roundsTotal }} 轮 · {{ breath.remain.toFixed(1) }}s</div>
+        <button class="btn btn-soft" @click="stopBreath" style="color:#fff;border-color:rgba(255,255,255,0.4);background:rgba(255,255,255,0.12)">结束</button>
+    </div>
+
+    <div class="toast" v-if="toast.show">{{ toast.msg }}</div>
+</div>
+
+<script>
+const { createApp, ref, reactive, computed, onMounted } = Vue
+
+createApp({
+    setup() {
+        const tab = ref('pre')
+        const saving = ref(false)
+        const toast = reactive({ show: false, msg: '' })
+        const urgeToast = ref(false)
+        const records = ref([])
+
+        const stats = reactive({
+            total: 0, by_scenario: { pre: 0, in: 0, post: 0 },
+            discipline_avg: null, premature_close: 0, missed_profit_sum: 0,
+            urge_total: 0, top_emotions: {},
+        })
+
+        // ===== 表单 =====
+        const preForm = reactive({
+            tension: 5, heart: 'normal', breathNote: '',
+            checklist: { plan: false, sl: false, noRevenge: false, state: false },
+            breathMode: '478', breathRounds: 3,
+        })
+        const inForm = reactive({
+            symbol: '', direction: '多', entry: '', sl: '', tp1: '',
+            urgeEvents: [], lockMin: 5, lockMode: '478', lockRounds: 4, lockNote: '',
+        })
+        const postForm = reactive({
+            outcome: 'tp1', emotion: '', premature: false, missedProfit: '', note: '', discipline: 5,
+        })
+
+        const preChecklistPass = computed(() =>
+            preForm.checklist.plan && preForm.checklist.sl && preForm.checklist.noRevenge && preForm.checklist.state)
+
+        const planAnchor = computed(() => {
+            const e = parseFloat(inForm.entry), s = parseFloat(inForm.sl), t = parseFloat(inForm.tp1)
+            if (!e || isNaN(s) || isNaN(t)) return null
+            const dir = inForm.direction === '多'
+            const distTP = dir ? (t - e) : (e - t)
+            const distSL = dir ? (e - s) : (s - e)
+            const r = distSL !== 0 ? (distTP / Math.abs(distSL)) : 0
+            return { distTP: +distTP.toFixed(2), distSL: +distSL.toFixed(2), r: +r.toFixed(2), be: +e.toFixed(2) }
+        })
+
+        // ===== 呼吸控制 =====
+        const breath = reactive({ active: false, mode: '478', label: '', remain: 0, scale: 0.45, dur: 4, roundsLeft: 0, roundsTotal: 0 })
+        let breathTimers = []
+        const BREATH = {
+            '478': [['吸气', 4, 1.0], ['屏息', 7, 1.0], ['呼气', 8, 0.45]],
+            '4444': [['吸气', 4, 1.0], ['屏息', 4, 1.0], ['呼气', 4, 0.45], ['屏息', 4, 0.45]],
+        }
+        function runPhase(pi, ri) {
+            const seq = BREATH[breath.mode]
+            const [label, sec, target] = seq[pi]
+            breath.label = label
+            breath.remain = sec
+            breath.dur = sec
+            breath.scale = target
+            const t = setInterval(() => {
+                breath.remain = Math.round((breath.remain - 0.1) * 10) / 10
+                if (breath.remain <= 0) { clearInterval(t); nextPhase(pi, ri) }
+            }, 100)
+            breathTimers.push(t)
+        }
+        function nextPhase(pi, ri) {
+            const seq = BREATH[breath.mode]
+            let npi = pi + 1, nri = ri
+            if (npi >= seq.length) { npi = 0; nri += 1 }
+            if (nri >= breath.roundsLeft) { stopBreath(); return }
+            runPhase(npi, nri)
+        }
+        function startBreath(mode, rounds) {
+            stopBreath()
+            breath.active = true
+            breath.mode = mode
+            breath.roundsLeft = rounds
+            breath.roundsTotal = rounds
+            runPhase(0, 0)
+        }
+        function stopBreath() {
+            breathTimers.forEach(clearInterval)
+            breathTimers = []
+            breath.active = false
+            breath.label = ''
+            breath.remain = 0
+        }
+        function lockNow() {
+            startBreath(inForm.lockMode, inForm.lockRounds)
+            showToast(`🧊 已锁死 ${inForm.lockMin} 分钟——跟我呼吸，先别碰终端`)
+        }
+
+        // ===== 冲动记录 =====
+        const URGE_LABELS = { close: '想提前平仓', modify_sl: '想改/移SL', refresh: '一直刷新' }
+        function logUrge(type) {
+            inForm.urgeEvents.push({ type, label: URGE_LABELS[type], at: new Date().toLocaleTimeString('zh-CN', { hour12: false }) })
+            urgeToast.value = true
+            setTimeout(() => { urgeToast.value = false }, 8000)
+        }
+
+        // ===== 保存 =====
+        async function postRecord(payload) {
+            saving.value = true
+            try {
+                const res = await fetch('/api/psych/record', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+                const json = await res.json()
+                if (json.code === 200) {
+                    showToast('✅ 已保存')
+                    await refresh()
+                    return true
+                } else {
+                    showToast('❌ ' + (json.msg || '保存失败'))
+                    return false
+                }
+            } catch (e) {
+                showToast('❌ 请求失败：' + e.message)
+                return false
+            } finally {
+                saving.value = false
+            }
+        }
+        function savePre() {
+            postRecord({
+                scenario: 'pre',
+                pre: {
+                    bodyScan: { tension: preForm.tension, heart: preForm.heart, note: preForm.breathNote },
+                    checklist: { ...preForm.checklist },
+                    checklistPass: preChecklistPass.value,
+                    breathMode: preForm.breathMode, breathRounds: preForm.breathRounds,
+                },
+            }).then(ok => { if (ok) { preForm.breathNote = ''; preForm.checklist = { plan: false, sl: false, noRevenge: false, state: false } } })
+        }
+        function saveIn() {
+            postRecord({
+                scenario: 'in',
+                in: {
+                    symbol: inForm.symbol, direction: inForm.direction,
+                    planAnchor: planAnchor.value || {},
+                    urgeEvents: inForm.urgeEvents, lockMin: inForm.lockMin, lockNote: inForm.lockNote,
+                },
+            }).then(ok => { if (ok) { inForm.urgeEvents = []; inForm.lockNote = '' } })
+        }
+        function savePost() {
+            postRecord({
+                scenario: 'post',
+                post: {
+                    outcome: postForm.outcome, emotion: postForm.emotion,
+                    premature_close: postForm.premature,
+                    missed_profit: postForm.missedProfit === '' ? null : parseFloat(postForm.missedProfit),
+                    note: postForm.note, discipline_score: postForm.discipline,
+                },
+            }).then(ok => { if (ok) { postForm.emotion = ''; postForm.note = ''; postForm.premature = false; postForm.missedProfit = '' } })
+        }
+
+        // ===== 查询 =====
+        async function refresh() {
+            try {
+                const [r1, r2] = await Promise.all([
+                    fetch('/api/psych/records?limit=100').then(r => r.json()),
+                    fetch('/api/psych/stats').then(r => r.json()),
+                ])
+                records.value = r1.records || []
+                const s = r2.stats || {}
+                stats.total = s.total || 0
+                stats.by_scenario = s.by_scenario || { pre: 0, in: 0, post: 0 }
+                stats.discipline_avg = s.discipline_avg
+                stats.premature_close = s.premature_close || 0
+                stats.missed_profit_sum = s.missed_profit_sum || 0
+                stats.urge_total = s.urge_total || 0
+                stats.top_emotions = s.top_emotions || {}
+            } catch (e) { /* 静默 */ }
+        }
+        async function delRecord(id) {
+            try {
+                await fetch('/api/psych/records/' + id, { method: 'DELETE' })
+                await refresh()
+            } catch (e) { showToast('❌ 删除失败') }
+        }
+
+        function summarize(r) {
+            if (r.scenario === 'pre') {
+                const p = r.pre || {}
+                const cnt = p.checklist ? Object.values(p.checklist).filter(Boolean).length : 0
+                return `紧张 ${p.bodyScan?.tension ?? '—'}/10 · 清单 ${cnt}/4${p.checklistPass ? ' ✓' : ''}`
+            }
+            if (r.scenario === 'in') {
+                const i = r.in || {}
+                const u = (i.urgeEvents || []).length
+                return `${i.symbol || '—'} ${i.direction || ''} · 冲动 ${u} 次${u ? ' ⚠' : ''}`
+            }
+            const p = r.post || {}
+            return `结果 ${p.outcome || '—'} · 情绪 ${p.emotion || '—'}${p.premature_close ? ' · 提前平仓' : ''}${p.missed_profit != null ? ' · 情绪税 ' + p.missed_profit + 'u' : ''} · 纪律 ${p.discipline_score ?? '—'}/10`
+        }
+
+        let toastTimer = null
+        function showToast(msg) {
+            toast.show = true; toast.msg = msg
+            if (toastTimer) clearTimeout(toastTimer)
+            toastTimer = setTimeout(() => { toast.show = false }, 2400)
+        }
+
+        onMounted(refresh)
+
+        return {
+            tab, saving, toast, urgeToast, records, stats,
+            preForm, inForm, postForm, preChecklistPass, planAnchor,
+            breath, startBreath, stopBreath, lockNow, logUrge,
+            savePre, saveIn, savePost, refresh, delRecord, summarize,
+        }
+    },
+}).mount('#app')
+</script>
+<script src="/static/components/topnav.js" defer></script></body>
+</html>

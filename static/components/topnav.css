@@ -1,0 +1,46 @@
+/* topnav.css — 顶部导航组件统一样式（取代每个页面 .topnav-* CSS） */
+topnav-bar {
+  display: contents;
+}
+.topnav-bar {
+  display: flex;
+  align-items: center;
+}
+.topnav-links {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  row-gap: 2px;
+  margin-left: 8px;
+  flex-wrap: wrap; /* 项目放不下时换到第二行，绝不静默裁切 */
+}
+.topnav-link {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  border-radius: 8px;
+  color: var(--text-muted, #6b7280);
+  text-decoration: none;
+  font-size: 12.5px;
+  font-weight: 500;
+  transition: all .15s;
+  white-space: nowrap;
+}
+.topnav-link svg {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+  stroke-width: 2;
+}
+.topnav-link:hover {
+  background: #f0f2f5;
+  color: var(--text, #1f2937);
+}
+.topnav-link.active {
+  background: var(--accent-soft, #eef2ff);
+  color: var(--accent, #4f46e5);
+}
+.topnav-link.active svg {
+  stroke: var(--accent, #4f46e5);
+}

@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>市场看板 ·  环境监控</title>
+    <link rel="stylesheet" href="/static/components/topnav.css">
+    <script src="/vendors/vue.global.prod.js"></script>
+    <script src="/vendors/echarts.min.js"></script>
+    <style>
+        :root{
+            --bg:#f0f2f7;
+            --panel:#ffffff;
+            --panel-2:#fafbfc;
+            --border:#ebedf0;
+            --border-soft:#f0f2f5;
+            --text:#1d1d1f;
+            --text-2:#424245;
+            --text-muted:#6e6e73;
+            --accent:#0a84ff;
+            --accent-2:#0066cc;
+            --accent-soft:#e8f1ff;
+            --green:#34c759;
+            --red:#ff3b30;
+            --orange:#ff9500;
+            --purple:#af52de;
+            --shadow-sm:0 1px 2px rgba(0,0,0,0.04);
+            --shadow:0 1px 3px rgba(0,0,0,0.04),0 4px 12px rgba(0,0,0,0.04);
+            --radius:12px;
+        }
+        *{box-sizing:border-box;margin:0;padding:0}
+        body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif;
+            background:var(--bg);color:var(--text);font-size:14px;line-height:1.5;padding-bottom:40px}
+        a{text-decoration:none;color:inherit}
+
+        /* 导航 */
+        .topnav{display:flex;align-items:center;gap:6px;padding:10px 20px;background:var(--panel);
+            border-bottom:1px solid var(--border);position:sticky;top:0;z-index:20;box-shadow:var(--shadow-sm)}
+        .topnav-spacer{flex:1}
+        .topnav-right{display:flex;align-items:center;gap:10px;color:var(--text-muted);font-size:12.5px}
+
+        .wrap{max-width:1240px;margin:0 auto;padding:20px 20px 0}
+        .page-head{display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px}
+        .page-title{font-size:20px;font-weight:700}
+        .page-sub{color:var(--text-muted);font-size:12.5px;margin-top:3px}
+        .head-right{display:flex;align-items:center;gap:10px}
+        .updated{font-size:12px;color:var(--text-muted)}
+        .stale-badge{font-size:11px;color:var(--orange);background:#fff5e9;border:1px solid #ffd9a8;
+            padding:2px 8px;border-radius:20px;font-weight:500}
+        .refresh-dot{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 0 3px rgba(52,199,89,.18)}
+
+        .section-title{font-size:14.5px;font-weight:700;margin:22px 0 12px;display:flex;align-items:center;gap:8px}
+        .section-title::before{content:"";width:3px;height:15px;background:var(--accent);border-radius:2px}
+
+        /* 核心指标卡 */
+        .metric-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+        .metric{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);
+            padding:14px 16px;box-shadow:var(--shadow-sm);position:relative;overflow:hidden}
+        .metric .k{font-size:12px;color:var(--text-muted);margin-bottom:6px;display:flex;align-items:center;gap:5px}
+        .metric .v{font-size:22px;font-weight:700;letter-spacing:-.3px}
+        .metric .sub{font-size:12px;color:var(--text-muted);margin-top:3px}
+        .up{color:var(--green)} .down{color:var(--red)}
+        .pill{position:absolute;top:12px;right:12px;font-size:11px;font-weight:600;padding:2px 9px;border-radius:20px}
+        .pill.green{background:#eafaf0;color:var(--green)} .pill.red{background:#ffeceb;color:var(--red)}
+        .pill.gray{background:#f0f2f5;color:var(--text-muted)}
+
+        /* 两列布局 */
+        .two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+        @media(max-width:860px){.two-col{grid-template-columns:1fr}}
+        .card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);
+            padding:16px;box-shadow:var(--shadow-sm)}
+        .card-head{font-size:13.5px;font-weight:700;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between}
+        #trendRadar{width:100%;height:340px}
+
+        /* 趋势明细 */
+        .tf-row{display:grid;grid-template-columns:54px 1fr 56px;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border-soft)}
+        .tf-row:last-child{border-bottom:none}
+        .tf-name{font-weight:700;font-size:13px}
+        .tf-bar{height:8px;border-radius:6px;background:linear-gradient(90deg,#ff3b30 0%,#ffcc00 50%,#34c759 100%);position:relative}
+        .tf-bar i{position:absolute;top:-3px;width:2px;height:14px;background:#1d1d1f;border-radius:2px;transform:translateX(-1px)}
+        .tf-score{text-align:right;font-weight:700;font-variant-numeric:tabular-nums}
+        .tf-meta{font-size:11px;color:var(--text-muted);margin-top:2px}
+
+        /* 关联市场卡 */
+        .corr-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+        .corr{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);
+            padding:14px 16px;box-shadow:var(--shadow-sm)}
+        .corr-top{display:flex;align-items:baseline;justify-content:space-between}
+        .corr-label{font-weight:700;font-size:14px}
+        .corr-rel{font-size:11px;color:var(--text-muted)}
+        .corr-price{font-size:20px;font-weight:700;margin:6px 0 2px;font-variant-numeric:tabular-nums}
+        .corr-chg{font-size:12px;font-weight:600}
+        .corr-corr{margin-top:10px}
+        .corr-corr .lab{font-size:11px;color:var(--text-muted);display:flex;justify-content:space-between;margin-bottom:4px}
+        .corr-track{height:7px;border-radius:5px;background:#f0f2f5;position:relative;overflow:hidden}
+        .corr-track .mid{position:absolute;left:50%;top:0;bottom:0;width:1px;background:#d2d6dc}
+        .corr-fill{position:absolute;top:0;bottom:0;left:50%;border-radius:4px}
+        .pos{background:rgba(52,199,89,.85)} .neg{background:rgba(255,59,48,.85)}
+
+        .empty{text-align:center;color:var(--text-muted);padding:40px;font-size:13px}
+        .loading-skeleton{background:linear-gradient(90deg,#f0f2f5 25%,#e9ebef 50%,#f0f2f5 75%);
+            background-size:200% 100%;animation:sk 1.2s infinite;border-radius:8px}
+        @keyframes sk{0%{background-position:200% 0}100%{background-position:-200% 0}}
+        .foot-note{margin-top:26px;text-align:center;color:var(--text-muted);font-size:11.5px;line-height:1.7}
+    </style>
+</head>
+<body>
+<div id="app">
+    <nav class="topnav">
+        <topnav-bar class="topnav-links" data-active="/market"></topnav-bar>
+        <div class="topnav-spacer"></div>
+        <div class="topnav-right"><span class="refresh-dot"></span><span>实时环境监控</span></div>
+    </nav>
+
+    <div class="wrap">
+        <div class="page-head">
+            <div>
+                <div class="page-title"> 市场环境看板</div>
+                <div class="page-sub">伦敦金 · 单品种多维度环境监控（绿涨红跌 · 数据每 30s~5min 刷新）</div>
+            </div>
+            <div class="head-right">
+                <span v-if="anyStale" class="stale-badge">部分数据延迟</span>
+                <span class="updated">更新于 {{ lastUpdated }}</span>
+            </div>
+        </div>
+
+        <!-- 核心指标 -->
+        <div class="section-title">核心指标</div>
+        <div class="metric-grid" v-if="ov">
+            <div class="metric">
+                <div class="k"> 现价</div>
+                <div class="v">{{ fmt(ov.price) }}</div>
+                <div class="sub">当前时段：{{ ov.session }}</div>
+            </div>
+            <div class="metric">
+                <div class="k">日内涨跌</div>
+                <div class="v" :class="ov.day_change>=0?'up':'down'">{{ ov.day_change>=0?'+':'' }}{{ fmt(ov.day_change) }}</div>
+                <div class="sub" :class="ov.day_change>=0?'up':'down'">{{ ov.day_change>=0?'+':'' }}{{ ov.day_change_pct }}%</div>
+                <span class="pill" :class="ov.day_change>=0?'green':'red'">{{ ov.day_change>=0?'涨':'跌' }}</span>
+            </div>
+            <div class="metric">
+                <div class="k">日内振幅</div>
+                <div class="v">{{ fmt(ov.range) }}</div>
+                <div class="sub">近24根1h高低差</div>
+            </div>
+            <div class="metric">
+                <div class="k">ATR(14)</div>
+                <div class="v">{{ fmt(ov.atr) }}</div>
+                <div class="sub">波动参考/止损</div>
+            </div>
+            <div class="metric">
+                <div class="k">枢轴 P</div>
+                <div class="v">{{ fmt(ov.pivot.p) }}</div>
+                <div class="sub">R1 {{ ov.pivot.r1 }} / S1 {{ ov.pivot.s1 }}</div>
+            </div>
+            <div class="metric">
+                <div class="k">关键阻力</div>
+                <div class="v">{{ fmt(ov.pivot.r2) }}</div>
+                <div class="sub">R2 {{ ov.pivot.r2 }} · R3 {{ ov.pivot.r3 }}</div>
+            </div>
+            <div class="metric">
+                <div class="k">关键支撑</div>
+                <div class="v">{{ fmt(ov.pivot.s2) }}</div>
+                <div class="sub">S2 {{ ov.pivot.s2 }} · S3 {{ ov.pivot.s3 }}</div>
+            </div>
+        </div>
+        <div class="metric-grid" v-else>
+            <div class="metric"><div class="loading-skeleton" style="height:60px"></div></div>
+            <div class="metric"><div class="loading-skeleton" style="height:60px"></div></div>
+            <div class="metric"><div class="loading-skeleton" style="height:60px"></div></div>
+        </div>
+
+        <!-- 趋势 + 关联 -->
+        <div class="two-col">
+            <div class="card">
+                <div class="card-head"><span>多周期趋势强度</span><span v-if="trend" :style="{color: compositeColor, fontWeight:700}">{{ trend._composite }} 综合</span></div>
+                <div id="trendRadar"></div>
+            </div>
+            <div class="card">
+                <div class="card-head"><span>各周期明细</span></div>
+                <div v-if="trend">
+                    <template v-for="tf in ['1h','4h','1d','1w']" :key="tf">
+                        <div class="tf-row" v-if="trend[tf]">
+                            <div>
+                                <div class="tf-name">{{ tf.toUpperCase() }}</div>
+                                <div class="tf-meta">{{ trend[tf].detail.dir }} · RSI {{ trend[tf].detail.rsi }}</div>
+                            </div>
+                            <div class="tf-bar"><i :style="{left: trend[tf].score + '%'}"></i></div>
+                            <div class="tf-score" :style="{color: scoreColor(trend[tf].score)}">{{ trend[tf].score }}</div>
+                        </div>
+                    </template>
+                </div>
+                <div v-else class="empty">趋势数据加载中…</div>
+            </div>
+        </div>
+
+        <div class="section-title">关联市场雷达</div>
+        <div class="corr-grid" v-if="corr && corr.length">
+            <div class="corr" v-for="c in corr" :key="c.key">
+                <div class="corr-top">
+                    <span class="corr-label">{{ c.label }}</span>
+                    <span class="corr-rel">与金 {{ c.relation }}</span>
+                </div>
+                <div class="corr-price" :class="c.change_pct>=0?'up':'down'">{{ fmt(c.price) }}</div>
+                <div class="corr-chg" :class="c.change_pct>=0?'up':'down'">{{ c.change_pct>=0?'▲ +':(c.change_pct<0?'▼ ':'') }}{{ c.change_pct }}%</div>
+                <div class="corr-corr">
+                    <div class="lab"><span>60日相关</span><span :style="{color: corrColor(c.corr60)}">{{ c.corr60 }}</span></div>
+                    <div class="corr-track">
+                        <span class="mid"></span>
+                        <span class="corr-fill" v-if="c.corr60!==null"
+                            :class="c.corr60>=0?'pos':'neg'"
+                            :style="corrFillStyle(c.corr60)"></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div v-else class="empty">关联市场数据加载中…（首次需从 Yahoo Finance 拉取）</div>
+
+        <div class="foot-note">
+            数据源：Binance  实时行情 · Yahoo Finance（DXY / 美债10Y / VIX / 标普 / 原油）<br>
+            相关系数为  日线与各品种近 20/60 日收盘价 Pearson 相关，仅供参考，不构成交易建议。
+        </div>
+    </div>
+</div>
+
+<script>
+const { createApp, ref, onMounted, computed } = Vue;
+
+createApp({
+    setup() {
+        const ov = ref(null);
+        const trend = ref(null);
+        const corr = ref(null);
+        const lastUpdated = ref('--');
+        const anyStale = ref(false);
+
+        const compositeColor = computed(() => {
+            if (!trend.value || trend.value._composite == null) return 'var(--text)';
+            const v = trend.value._composite;
+            return v >= 55 ? 'var(--green)' : (v <= 45 ? 'var(--red)' : 'var(--orange)');
+        });
+
+        function fmt(n) {
+            if (n == null) return '--';
+            return Number(n).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        }
+        function scoreColor(s) {
+            if (s == null) return 'var(--text)';
+            return s >= 55 ? 'var(--green)' : (s <= 45 ? 'var(--red)' : 'var(--orange)');
+        }
+        function corrColor(c) {
+            if (c == null) return 'var(--text-muted)';
+            return c >= 0 ? 'var(--green)' : 'var(--red)';
+        }
+        function corrFillStyle(c) {
+            // c in [-1,1]; fill width from center (50%)
+            const pct = Math.abs(c) * 50;
+            if (c >= 0) return { left: '50%', width: pct + '%' };
+            return { left: (50 - pct) + '%', width: pct + '%' };
+        }
+
+        let radarChart = null;
+        function renderRadar() {
+            if (!trend.value) return;
+            const t = trend.value;
+            const vals = ['1h','4h','1d','1w'].map(tf => t[tf] ? t[tf].score : 50);
+            vals.push(t._composite ?? 50);
+            const comp = t._composite ?? 50;
+            const col = comp >= 55 ? '#34c759' : (comp <= 45 ? '#ff3b30' : '#ff9500');
+            if (!radarChart) {
+                radarChart = echarts.init(document.getElementById('trendRadar'));
+                window.addEventListener('resize', () => radarChart && radarChart.resize());
+            }
+            radarChart.setOption({
+                tooltip: {},
+                radar: {
+                    indicator: [
+                        {name:'1H', max:100}, {name:'4H', max:100}, {name:'1D', max:100},
+                        {name:'1W', max:100}, {name:'综合', max:100}
+                    ],
+                    radius: '66%',
+                    center: ['50%','54%'],
+                    axisName: {color:'#6e6e73', fontSize:12},
+                    splitArea: {areaStyle: {color:['#fafbfc','#f4f6f9']}},
+                    splitLine: {lineStyle:{color:'#e6e9ef'}},
+                    axisLine: {lineStyle:{color:'#e6e9ef'}}
+                },
+                series: [{
+                    type: 'radar',
+                    data: [{
+                        value: vals,
+                        name: '趋势强度',
+                        areaStyle: {color: col + '33'},
+                        lineStyle: {color: col, width: 2},
+                        itemStyle: {color: col},
+                    }]
+                }]
+            });
+        }
+
+        async function loadOverview() {
+            try {
+                const r = await fetch('/api/market/overview');
+                const j = await r.json();
+                if (j.data) { ov.value = j.data; lastUpdated.value = j.data.updated_at || '刚刚'; }
+                if (j.stale) anyStale.value = true;
+            } catch (e) {}
+        }
+        async function loadTrend() {
+            try {
+                const r = await fetch('/api/market/trend');
+                const j = await r.json();
+                if (j.data) { trend.value = j.data; renderRadar(); }
+                if (j.stale) anyStale.value = true;
+            } catch (e) {}
+        }
+        async function loadCorr() {
+            try {
+                const r = await fetch('/api/market/correlations');
+                const j = await r.json();
+                if (j.data) corr.value = j.data;
+                if (j.stale) anyStale.value = true;
+            } catch (e) {}
+        }
+
+        onMounted(() => {
+            loadOverview(); loadTrend(); loadCorr();
+            setInterval(loadOverview, 30000);
+            setInterval(loadTrend, 60000);
+            setInterval(loadCorr, 300000);
+        });
+
+        return { ov, trend, corr, lastUpdated, anyStale, compositeColor,
+                 fmt, scoreColor, corrColor, corrFillStyle };
+    }
+}).mount('#app');
+</script>
+<script src="/static/components/topnav.js" defer></script></body>
+</html>

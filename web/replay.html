@@ -1,0 +1,1098 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>K线回放 · K线工具箱</title>
+    <link rel="stylesheet" href="/static/components/topnav.css">
+    <script src="/vendors/vue.global.prod.js"></script>
+    <script src="/vendors/echarts.min.js"></script>
+    <style>
+        :root{
+            --bg:#f0f2f7;
+            --panel:#ffffff;
+            --panel-2:#fafbfc;
+            --border:#ebedf0;
+            --border-soft:#f0f2f5;
+            --text:#1d1d1f;
+            --text-2:#424245;
+            --text-muted:#6e6e73;
+            --accent:#0a84ff;
+            --accent-2:#0066cc;
+            --accent-soft:#e8f1ff;
+            --green:#34c759;
+            --red:#ff3b30;
+            --orange:#ff9500;
+            --purple:#af52de;
+            --shadow-sm:0 1px 2px rgba(0,0,0,0.04);
+            --shadow:0 1px 3px rgba(0,0,0,0.04),0 4px 12px rgba(0,0,0,0.04);
+            --shadow-lg:0 2px 8px rgba(0,0,0,0.05),0 12px 28px rgba(0,0,0,0.06);
+            --radius:16px;
+            --radius-sm:10px;
+            --radius-pill:999px;
+            --font:-apple-system,BlinkMacSystemFont,"SF Pro Text","SF Pro Display","Helvetica Neue",system-ui,sans-serif;
+        }
+        *{margin:0;padding:0;box-sizing:border-box;}
+        html,body{height:100%;}
+        body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:13px;line-height:1.5;-webkit-font-smoothing:antialiased;}
+
+        /* ===== 顶部导航 ===== */
+        .topnav{min-height:56px;height:auto;flex-wrap:wrap;background:#fff;border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 24px;gap:12px;position:sticky;top:0;z-index:100;}
+        /* ===== 顶部工具按钮（同步/数据） ===== */
+        .topnav-actions{display:flex;align-items:center;gap:8px;margin-left:16px;padding-left:16px;border-left:1px solid var(--border);}
+        .nav-sync-btn{display:inline-flex;align-items:center;gap:6px;padding:7px 13px;border:1px solid transparent;border-radius:var(--radius-pill);font-size:12.5px;font-weight:500;cursor:pointer;font-family:inherit;transition:all .15s;line-height:1.2;background:transparent;color:var(--text-2);}
+        .nav-sync-btn svg{width:14px;height:14px;stroke-width:2;}
+        .nav-sync-btn:hover{background:#f0f2f5;color:var(--text);}
+        .nav-sync-btn:disabled{opacity:.45;cursor:not-allowed;}
+        .nav-sync-btn.db{color:var(--text-2);}
+        .nav-sync-btn.data{color:var(--accent);}
+        .nav-sync-btn.data:hover{background:var(--accent-soft);color:var(--accent);}
+        .sync-dot{width:7px;height:7px;border-radius:50%;background:var(--text-muted);flex-shrink:0;transition:all .3s;}
+        .sync-dot.idle{background:#d1d5db;}
+        .sync-dot.running{background:var(--orange);box-shadow:0 0 0 0 var(--orange);animation:syncPulse 1.4s infinite;}
+        .sync-dot.done{background:var(--green);}
+        .sync-dot.error{background:var(--red);}
+        @keyframes syncPulse{0%{box-shadow:0 0 0 0 rgba(255,149,0,.5);}70%{box-shadow:0 0 0 7px rgba(255,149,0,0);}100%{box-shadow:0 0 0 0 rgba(255,149,0,0);}}
+
+        /* ===== 数据同步状态浮窗 ===== */
+        .sync-panel{position:fixed;top:68px;right:16px;width:380px;max-height:520px;background:#fff;border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-lg);z-index:200;display:none;flex-direction:column;overflow:hidden;animation:slideDown .25s cubic-bezier(.32,.72,0,1);}
+        .sync-panel.open{display:flex;}
+        @keyframes slideDown{from{opacity:0;transform:translateY(-8px);}to{opacity:1;transform:translateY(0);}}
+        .sync-panel-head{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--border);background:#fafbfc;}
+        .sync-panel-title{font-size:13px;font-weight:600;color:var(--text);}
+        .sync-panel-meta{margin-left:auto;font-size:11.5px;color:var(--text-muted);font-family:Consolas,monospace;}
+        .sync-panel-close{background:transparent;border:none;color:var(--text-muted);cursor:pointer;font-size:18px;line-height:1;padding:2px 6px;border-radius:6px;}
+        .sync-panel-close:hover{background:#f0f2f5;color:var(--text);}
+        .sync-panel-body{flex:1;overflow-y:auto;padding:10px 14px;font-family:Consolas,monospace;font-size:11.5px;line-height:1.6;background:#1d1d1f;color:#e5e7eb;}
+        .sync-panel-body:empty::before{content:'暂无日志';display:block;color:#6e6e73;text-align:center;padding:20px 0;}
+        .log-line{display:flex;gap:8px;padding:1px 0;}
+        .log-time{color:#6e6e73;flex-shrink:0;}
+        .log-msg{flex:1;word-break:break-all;}
+        .log-line.info .log-msg{color:#d1d5db;}
+        .log-line.ok .log-msg{color:#34c759;}
+        .log-line.warn .log-msg{color:#ff9500;}
+        .log-line.err .log-msg{color:#ff453a;}
+        .sync-panel-foot{padding:10px 14px;border-top:1px solid var(--border);background:#fafbfc;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-muted);}
+        .sync-panel-foot .spacer{flex:1;}
+        .sync-mini-btn{padding:4px 12px;border:1px solid var(--border);border-radius:var(--radius-pill);background:#fff;color:var(--text-2);font-size:12px;cursor:pointer;font-family:inherit;transition:all .15s;}
+        .sync-mini-btn:hover{background:#f0f2f5;}
+        .sync-mini-btn.primary{background:var(--accent);color:#fff;border-color:var(--accent);}
+        .sync-mini-btn.primary:hover{background:var(--accent-2);}
+        .sync-status-tag{display:inline-flex;align-items:center;gap:5px;font-weight:500;}
+        .sync-status-tag.idle{color:var(--text-muted);}
+        .sync-status-tag.running{color:var(--orange);}
+        .sync-status-tag.done{color:var(--green);}
+        .sync-status-tag.error{color:var(--red);}
+
+        /* ===== 内容区 ===== */
+        .content{padding:18px 24px 24px;display:flex;flex-direction:column;gap:14px;min-height:calc(100vh - 56px);}
+        .page-head{display:flex;align-items:baseline;gap:14px;margin-bottom:2px;}
+        .page-heading{font-size:18px;font-weight:600;color:var(--text);letter-spacing:-.2px;}
+        .page-sub{font-size:12.5px;color:var(--text-muted);font-family:Consolas,monospace;}
+
+        /* ===== Card ===== */
+        .card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-sm);}
+
+        /* ===== Chart card ===== */
+        .chart-card{flex-shrink:0;padding:14px 16px;display:flex;flex-direction:column;background:var(--panel);}
+        .chart-wrap{height:calc(100vh - 330px);min-height:460px;max-height:860px;position:relative;border-radius:10px;background:#fafbfc;border:1px solid var(--border-soft);overflow:hidden;}
+        #chart{width:100%;height:100%;}
+
+        /* ===== 暂停横幅 ===== */
+        .pause-banner{position:absolute;left:50%;top:14px;transform:translateX(-50%);background:var(--red);color:#fff;padding:8px 14px;border-radius:var(--radius-pill);font-size:13px;font-weight:500;box-shadow:0 4px 14px rgba(255,59,48,0.3);display:flex;align-items:center;gap:10px;z-index:10;}
+        .pause-banner button{background:#fff;color:var(--red);border:none;border-radius:var(--radius-pill);padding:3px 10px;font-weight:600;cursor:pointer;font-size:12px;transition:all .15s;}
+        .pause-banner button:hover{background:#fef2f2;}
+
+        /* ===== 信号卡 ===== */
+        .signal-card{position:absolute;left:90px;bottom:30px;width:300px;background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:16px;z-index:11;box-shadow:var(--shadow-lg);}
+        .sc-head{display:flex;align-items:center;gap:8px;margin-bottom:4px;}
+        .sc-dir{font-size:11.5px;font-weight:600;padding:3px 9px;border-radius:var(--radius-pill);}
+        .sc-dir.long{background:rgba(52,199,89,.12);color:var(--green);}
+        .sc-dir.short{background:rgba(255,59,48,.12);color:var(--red);}
+        .sc-title{font-size:14px;font-weight:600;color:var(--text);}
+        .sc-meta{font-size:12px;color:var(--text-muted);margin-bottom:12px;}
+        .sc-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px 12px;}
+        .sc-grid label{display:block;font-size:11px;color:var(--text-muted);margin-bottom:2px;}
+        .sc-grid span{font-size:14px;font-family:Consolas,monospace;color:var(--text);}
+        .sc-grid .sl{color:var(--red);}
+        .sc-grid .tp{color:var(--green);}
+        .sc-foot{margin-top:10px;font-size:12px;color:var(--accent);text-align:right;}
+
+        /* ===== 控制卡 ===== */
+        .controls-card{flex-shrink:0;padding:12px 18px 14px;display:flex;flex-direction:column;gap:9px;}
+        .controls-card.collapsed{display:none;}
+        .ctrl-togglebar{display:inline-flex;align-items:center;gap:8px;align-self:center;padding:7px 18px;cursor:pointer;user-select:none;color:var(--text-2);font-size:12.5px;font-weight:500;border:1px solid var(--border);border-radius:var(--radius-pill);background:#fff;transition:all .15s;box-shadow:var(--shadow-sm);}
+        .ctrl-togglebar:hover{border-color:#d1d5db;color:var(--text);background:#fafbfc;}
+        .ctrl-togglebar svg{width:13px;height:13px;transition:transform .2s;color:var(--accent);}
+        .ctrl-togglebar .kbd{margin-left:2px;opacity:.55;font-weight:400;color:var(--text-muted);font-size:11.5px;}
+        .ctrl-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+        .ctrl-row + .ctrl-row{padding-top:10px;border-top:1px solid var(--border-soft);}
+        .ctrl-row label{font-size:12px;color:var(--text-muted);white-space:nowrap;}
+
+        input[type=text],input[type=number],select,textarea{padding:7px 11px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;background:var(--panel-2);color:var(--text);font-family:inherit;transition:border-color .15s,box-shadow .15s;}
+        input::placeholder,textarea::placeholder{color:#9ca3af;}
+        input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(10,132,255,0.15);}
+        input[type=text]{width:160px;}
+        input[type=number]{width:70px;}
+        select{height:32px;padding:0 10px;}
+
+        .btn{padding:7px 14px;border-radius:var(--radius-pill);border:none;cursor:pointer;font-size:13px;font-family:inherit;font-weight:500;transition:all .15s;display:inline-flex;align-items:center;gap:6px;line-height:1.2;}
+        .btn-primary{background:var(--green);color:#fff;}
+        .btn-primary:hover{filter:brightness(1.05);transform:translateY(-1px);}
+        .btn-primary:disabled{background:#d1d5db;color:#9ca3af;cursor:not-allowed;transform:none;}
+        .btn-warn{background:var(--red);color:#fff;}
+        .btn-warn:hover{filter:brightness(1.05);}
+        .btn-ghost{background:transparent;color:var(--text-muted);}
+        .btn-ghost:hover{background:#f0f2f5;color:var(--text);}
+        .btn-soft{background:#f0f2f5;color:var(--text);}
+        .btn-soft:hover{background:#e5e7eb;}
+        .btn-accent{background:var(--accent);color:#fff;}
+        .btn-accent:hover{background:var(--accent-2);}
+        .btn-dark{background:var(--text);color:#fff;}
+        .btn-dark:hover{background:#000;}
+        .play{min-width:68px;justify-content:center;}
+
+        /* 滑块 */
+        input[type=range]{-webkit-appearance:none;appearance:none;height:4px;background:#e5e7eb;border-radius:4px;outline:none;cursor:pointer;flex:1;min-width:120px;}
+        input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:14px;height:14px;border-radius:50%;background:#fff;border:2px solid var(--accent);box-shadow:0 1px 3px rgba(0,0,0,.12);cursor:pointer;transition:transform .12s;}
+        input[type=range]::-webkit-slider-thumb:hover{transform:scale(1.15);}
+        input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:#fff;border:2px solid var(--accent);cursor:pointer;}
+
+        .range-label{font-size:12px;color:var(--accent);min-width:110px;text-align:right;font-weight:500;}
+        .range-hint{font-size:12px;color:var(--text-muted);}
+
+        .seek-wrap{flex:1;display:flex;align-items:center;gap:10px;min-width:260px;}
+        .seek-wrap input[type=range]{background:rgba(255,149,0,0.25);}
+        .seek-wrap input[type=range]::-webkit-slider-thumb{border-color:var(--orange);}
+        .seek-wrap input[type=range]::-moz-range-thumb{border-color:var(--orange);}
+        .time-readout{font-family:Consolas,monospace;font-size:13px;color:var(--text);min-width:150px;}
+
+        /* 检查点 */
+        .cp-toggle{font-size:12.5px;color:var(--text-muted);cursor:pointer;user-select:none;font-weight:500;}
+        .cp-toggle:hover{color:var(--text);}
+        .cp-body{width:100%;margin-top:8px;}
+        .cp-input{display:flex;gap:8px;align-items:flex-start;}
+        textarea{flex:1;height:60px;font-family:Consolas,monospace;font-size:12px;resize:vertical;}
+        .cp-actions{display:flex;gap:8px;align-items:center;margin-top:8px;}
+        .cp-list{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;max-height:80px;overflow:auto;}
+        .cp-item{display:inline-flex;align-items:center;gap:6px;font-size:12px;padding:3px 9px;background:var(--panel-2);border:1px solid var(--border);border-radius:var(--radius-pill);transition:border-color .15s;}
+        .cp-item:hover{border-color:#d1d5db;}
+        .dot{width:7px;height:7px;border-radius:50%;background:#d1d5db;}
+        .dot.done{background:var(--green);}
+        .dot.hit{background:var(--red);box-shadow:0 0 6px rgba(255,59,48,.5);}
+        .cp-time{font-family:Consolas,monospace;color:var(--text);}
+        .cp-status{font-size:11px;color:var(--text-muted);}
+        .cp-tag{font-size:11px;color:var(--orange);background:rgba(255,149,0,.1);padding:1px 7px;border-radius:var(--radius-pill);}
+        .sig-hint{font-size:11.5px;color:var(--text-muted);margin-top:8px;}
+
+        .msg{font-size:12.5px;margin-left:auto;color:var(--text-muted);}
+        .msg.ok{color:var(--green);}
+        .msg.err{color:var(--red);}
+
+        /* ===== Scrollbar ===== */
+        ::-webkit-scrollbar{width:8px;height:8px;}
+        ::-webkit-scrollbar-track{background:transparent;}
+        ::-webkit-scrollbar-thumb{background:rgba(0,0,0,.12);border-radius:4px;}
+        ::-webkit-scrollbar-thumb:hover{background:rgba(0,0,0,.2);}
+    </style>
+</head>
+<body>
+<header class="topnav">
+    <topnav-bar class="topnav-links" data-active="/replay"></topnav-bar>
+    <div class="topnav-actions">
+        <button class="nav-sync-btn db" id="syncDbBtn" title="校验并创建数据库表结构">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"/></svg>
+            校验库
+        </button>
+        <button class="nav-sync-btn data" id="syncDataBtn" title="从 Binance 增量同步行情">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+            同步行情
+        </button>
+    </div>
+</header>
+
+<!-- 数据同步状态浮窗 -->
+<div id="syncPanel" class="sync-panel">
+    <div class="sync-panel-head">
+        <span class="sync-panel-title">📡 数据同步</span>
+        <span class="sync-panel-meta" id="syncElapsed">--:--</span>
+        <button class="sync-panel-close" id="syncCloseBtn" title="关闭">×</button>
+    </div>
+    <div class="sync-panel-body" id="syncLogs"></div>
+    <div class="sync-panel-foot">
+        <span class="sync-status-tag" id="syncStatusTag"><span class="sync-dot idle"></span><span>空闲</span></span>
+        <span class="spacer"></span>
+        <button class="sync-mini-btn" id="syncClearBtn">清空日志</button>
+    </div>
+</div>
+
+<div id="app">
+    <div class="content">
+        <div class="page-head">
+            <h1 class="page-heading">K线回放</h1>
+            <span class="page-sub">{{ ready ? `${interval} · ${total} 根 · 窗口 ${viewWindow}` : '未加载数据' }}</span>
+        </div>
+
+        <div class="card chart-card">
+            <div class="chart-wrap">
+                <div id="chart"></div>
+                <div class="pause-banner" v-if="pausedAtCp">
+                    <span v-if="pausedAtCp.source==='signal'">⏸ 已暂停于信号卡点 {{ pausedAtCp.label }}（{{ pausedAtCp.pattern }}）— 按 Enter 继续</span>
+                    <span v-else>⏸ 已暂停于检查点 {{ pausedAtCp.label }} — 按 Enter 继续</span>
+                    <button class="btn btn-primary" @click="resume">继续 ▶</button>
+                </div>
+                <div class="signal-card" v-if="pausedAtCp && pausedAtCp.source==='signal'">
+                    <div class="sc-head">
+                        <span class="sc-dir" :class="pausedAtCp.direction==='做多'?'long':'short'">{{ pausedAtCp.direction }}</span>
+                        <span class="sc-title">{{ pausedAtCp.pattern }}</span>
+                    </div>
+                    <div class="sc-meta">{{ pausedAtCp.label }} · {{ pausedAtCp.symbol || '—' }} · {{ pausedAtCp.interval }}</div>
+                    <div class="sc-grid">
+                        <div><label>入场价</label><span>{{ fmtNum(pausedAtCp.entry) }}</span></div>
+                        <div><label>止损价</label><span class="sl">{{ fmtNum(pausedAtCp.sl) }}</span></div>
+                        <div><label>止盈 TP1</label><span class="tp">{{ fmtNum(pausedAtCp.tp1) }}</span></div>
+                        <div><label>止盈 TP2</label><span class="tp">{{ fmtNum(pausedAtCp.tp2) }}</span></div>
+                    </div>
+                    <div class="sc-foot">按 Enter 继续 ▶</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="ctrl-togglebar" @click="showControls = !showControls">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" :style="{ transform: showControls ? 'rotate(0deg)' : 'rotate(-90deg)' }"><polyline points="6 9 12 15 18 9"/></svg>
+            <span>{{ showControls ? '收起控制面板' : '展开控制面板' }}</span>
+            <span class="kbd">播放 ␣ · 继续 Enter</span>
+        </div>
+
+        <div class="card controls-card" :class="{ collapsed: !showControls }">
+            <div class="ctrl-row">
+                <label>起始</label>
+                <input type="text" v-model="startTime" placeholder="YYYY-MM-DD HH:MM:SS">
+                <label>结束</label>
+                <input type="text" v-model="endTime" placeholder="YYYY-MM-DD HH:MM:SS">
+                <label>周期</label>
+                <select v-model="interval">
+                    <option value="1m">1m</option>
+                    <option value="5m">5m</option>
+                    <option value="15m">15m</option>
+                    <option value="30m">30m</option>
+                </select>
+                <button class="btn btn-primary" :disabled="loading" @click="load">加载数据</button>
+                <span class="msg" :class="tipClass" v-if="msg">{{ msg }}</span>
+            </div>
+
+            <div class="ctrl-row">
+                <label>回放眼范围</label>
+                <input type="range" min="0" max="10" step="1" v-model.number="rangeIndex" @input="onRangeSlide">
+                <span class="range-label">{{ rangeLabel }}</span>
+                <span class="range-hint">拖动可快速修改「起始时间」</span>
+            </div>
+
+            <div class="ctrl-row">
+                <button class="btn btn-accent play" :class="{ active: playing }" :disabled="!ready" @click="togglePlay">
+                    {{ playing ? '⏸ 暂停' : '▶ 播放' }}
+                </button>
+                <button class="btn btn-soft" :disabled="!ready || playing" @click="step">⏭ 单步</button>
+                <button class="btn btn-soft" :disabled="!ready" @click="reset">↺ 重置</button>
+                <label>速度</label>
+                <select v-model="speedMs">
+                    <option :value="400">慢 400ms</option>
+                    <option :value="150">中 150ms</option>
+                    <option :value="60">快 60ms</option>
+                    <option :value="20">极快 20ms</option>
+                </select>
+                <label>窗口</label>
+                <input type="number" v-model.number="viewWindow" min="50" max="2000" step="50" autocomplete="off">
+                <div class="seek-wrap">
+                    <span class="time-readout">{{ cursorTimeLabel }}</span>
+                    <input type="range" min="0" :max="Math.max(0, total-1)" step="1"
+                           :value="seekValue" @input="onSeek" @pointerdown="pause">
+                    <span class="time-readout" style="min-width:auto">{{ seekValue + 1 }} / {{ total }}</span>
+                </div>
+            </div>
+
+            <div class="ctrl-row" style="align-items:flex-start;">
+                <div style="flex:1;min-width:320px;">
+                    <div class="cp-toggle" @click="showCp = !showCp">
+                        {{ showCp ? '▼' : '▶' }} 检查点设置（{{ manualCount }} 个）
+                    </div>
+                    <div class="cp-body" v-if="showCp">
+                        <div class="cp-input">
+                            <textarea v-model="cpText" placeholder="2026-08-20 01:10:00&#10;2026-08-25 14:00&#10;每行一个检查点时间，到达自动暂停"></textarea>
+                            <div style="display:flex;flex-direction:column;gap:6px;">
+                                <button class="btn btn-primary" @click="importCheckpoints">导入检查点</button>
+                                <button class="btn btn-ghost" @click="fileInput.click()">📂 文件</button>
+                                <input ref="fileInput" type="file" accept=".txt,.csv" style="display:none" @change="importFile">
+                                <button class="btn btn-warn" @click="clearManual">清空</button>
+                            </div>
+                        </div>
+                        <ul class="cp-list" v-if="checkpoints.length">
+                            <li class="cp-item" v-for="(cp, i) in checkpoints" :key="i">
+                                <span class="dot" :class="{ done: cp.done, hit: cp.triggered && pausedAtCpTs === cp.ts }"></span>
+                                <span class="cp-time">{{ cp.label }}</span>
+                                <span v-if="cp.source==='signal'" class="cp-tag" :title="cp.pattern">{{ cp.pattern }}</span>
+                                <span class="cp-status">{{ cpStatusText(cp) }}</span>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+                <div style="flex:1;min-width:320px;">
+                    <div class="cp-toggle" @click="showSignal = !showSignal">
+                        {{ showSignal ? '▼' : '▶' }} 信号表导入（{{ signalCount }} 个卡点）
+                    </div>
+                    <div class="cp-body" v-if="showSignal">
+                        <div class="cp-input">
+                            <textarea v-model="signalText" placeholder="粘贴信号表（支持 markdown 管道表 或 Tab/逗号分隔）：&#10;| 信号时间 | 品种 | K线周期 | 形态/架构 | 方向 | 入场价 | 止损价 | 止盈TP1 | 止盈TP2 |"></textarea>
+                            <div style="display:flex;flex-direction:column;gap:6px;">
+                                <button class="btn btn-primary" @click="importSignals">导入信号</button>
+                                <button class="btn btn-ghost" @click="sigFileInput.click()">📂 文件</button>
+                                <input ref="sigFileInput" type="file" accept=".txt,.csv,.md" style="display:none" @change="importSignalFile">
+                                <button class="btn btn-warn" @click="clearSignals">清空信号</button>
+                            </div>
+                        </div>
+                        <div class="sig-hint">导入后每个信号的「信号时间」自动成为卡点，回放到此自动暂停并展示信号详情</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const { createApp, ref, reactive, computed, watch, onMounted, onBeforeUnmount } = Vue
+
+createApp({
+    setup() {
+        const startTime = ref('')
+        const endTime = ref('')
+        const interval = ref('1m')
+        const loading = ref(false)
+        const msg = ref('')
+        const tipClass = ref('')
+
+        const ready = ref(false)
+        const playing = ref(false)
+        const speedMs = ref(150)
+        const viewWindow = ref(100)
+        try {
+            const saved = localStorage.getItem('replay.viewWindow')
+            const n = saved ? parseInt(saved, 10) : NaN
+            if (!isNaN(n) && n >= 50 && n <= 2000) viewWindow.value = n
+        } catch (e) {}
+
+        const allBars = []
+        const cursor = ref(-1)
+        const total = ref(0)
+
+        const checkpoints = reactive([])
+        const nextCp = ref(0)
+        const pausedAtCp = ref(null)
+        const pausedAtCpTs = ref(0)
+        const cpText = ref('')
+        const fileInput = ref(null)
+        const showCp = ref(true)
+
+        const signalText = ref('')
+        const sigFileInput = ref(null)
+        const showSignal = ref(true)
+        const showControls = ref(true)
+
+        const RANGE_HOURS = [1, 3, 6, 12, 24, 48, 72, 168, 336, 720, 1440]
+        const rangeIndex = ref(3)
+
+        let chart = null
+        let timer = null
+
+        const pad = (n) => String(n).padStart(2, '0')
+        const fmt = (ts) => {
+            const d = new Date(ts)
+            return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+        }
+        const now = new Date()
+        endTime.value = fmt(now.getTime())
+        startTime.value = fmt(now.getTime() - RANGE_HOURS[rangeIndex.value] * 3600 * 1000)
+
+        const rangeLabel = computed(() => {
+            const h = RANGE_HOURS[rangeIndex.value]
+            if (h < 24) return `最近 ${h} 小时`
+            if (h % 24 === 0) return `最近 ${h/24} 天`
+            return `最近 ${Math.floor(h/24)} 天 ${h%24} 小时`
+        })
+
+        const cursorTimeLabel = computed(() => cursor.value >= 0 ? fmt(allBars[cursor.value].close_time) : '—')
+        const seekValue = computed(() => Math.max(0, cursor.value))
+
+        const manualCount = computed(() => checkpoints.filter(c => c.source !== 'signal').length)
+        const signalCount = computed(() => checkpoints.filter(c => c.source === 'signal').length)
+        const fmtNum = (v) => (v == null || isNaN(v)) ? '—' : Number(v).toFixed(2)
+
+        const parseTime = (s) => {
+            s = (s || '').trim()
+            if (!s) return null
+            let t = new Date(s.replace(' ', 'T')).getTime()
+            if (isNaN(t)) t = new Date(s).getTime()
+            return isNaN(t) ? null : t
+        }
+
+        const onRangeSlide = () => {
+            const endTs = parseTime(endTime.value)
+            if (!endTs) return
+            const startTs = endTs - RANGE_HOURS[rangeIndex.value] * 3600 * 1000
+            startTime.value = fmt(startTs)
+        }
+
+        const load = async () => {
+            if (loading.value) return
+            const startTs = parseTime(startTime.value)
+            const endTs = parseTime(endTime.value)
+            if (!startTs) { msg.value = '起始时间格式错误'; tipClass.value = 'err'; return }
+            if (!endTs) { msg.value = '结束时间格式错误'; tipClass.value = 'err'; return }
+            if (startTs >= endTs) { msg.value = '起始时间必须早于结束时间'; tipClass.value = 'err'; return }
+
+            const startStr = fmt(startTs)
+            const endStr = fmt(endTs)
+
+            loading.value = true
+            msg.value = '加载中…'; tipClass.value = ''
+            try {
+                const params = new URLSearchParams({ startTime: startStr, endTime: endStr, interval: interval.value })
+                const ctrl = new AbortController()
+                const t = setTimeout(() => ctrl.abort(), 30000)
+                const resp = await fetch(`/api/kline/review?${params.toString()}`, { signal: ctrl.signal })
+                clearTimeout(t)
+                const json = await resp.json()
+                if (json.code !== 200) {
+                    msg.value = json.msg || '加载失败'; tipClass.value = 'err'; ready.value = false; return
+                }
+                allBars.length = 0
+                allBars.push(...(json.data || []))
+                total.value = allBars.length
+                if (!total.value) {
+                    msg.value = '该区间无数据'; tipClass.value = 'err'; ready.value = false; return
+                }
+                reset()
+                recalcCpState()
+                msg.value = `已加载 ${total.value} 根${json.truncated ? '（已截断）' : ''}`
+                tipClass.value = 'ok'
+                ready.value = true
+            } catch (e) {
+                msg.value = '加载失败：' + e.message; tipClass.value = 'err'; ready.value = false
+            } finally {
+                loading.value = false
+            }
+        }
+
+        const fmtSignalPrice = (v) => {
+            if (v == null || isNaN(Number(v))) return '—'
+            return Number(v).toFixed(Number(v) >= 1000 ? 1 : 2)
+        }
+
+        // 根据已导入信号生成 scatter 标记数据：做多 ▲ 蓝，做空 ▼ 黄
+        const buildSignalMarks = () => {
+            const out = []
+            for (const cp of checkpoints) {
+                if (cp.source !== 'signal') continue
+                let idx = -1
+                for (let i = 0; i < allBars.length; i++) {
+                    if (allBars[i].close_time >= cp.ts) { idx = i; break }
+                }
+                if (idx < 0) continue
+                const bar = allBars[idx]
+                const dir = String(cp.direction || '')
+                const isLong = dir.includes('多') || /long|buy/i.test(dir)
+                const isShort = dir.includes('空') || /short|sell/i.test(dir)
+                // 上涨信号：蓝色向上三角；下跌信号：黄色向下三角
+                const color = isLong ? '#0a84ff' : '#ff9500'
+                const symbol = 'triangle'
+                const symbolRotate = isLong ? 0 : 180
+                const range = Math.max(bar.high_price - bar.low_price, 0.0001)
+                // 标记远离 K 线实体，避免遮挡：取实体高度 18% 与最小绝对值的较大值
+                const offset = Math.max(range * 0.18, bar.low_price * 0.0008, 0.15)
+                const y = isLong ? bar.low_price - offset : bar.high_price + offset
+                out.push({
+                    value: [bar.close_time, y],
+                    symbol,
+                    symbolRotate,
+                    symbolSize: [11, 11],
+                    itemStyle: { color, borderColor: color, borderWidth: 0, opacity: 0.95 },
+                    _sig: {
+                        direction: cp.direction,
+                        pattern: cp.pattern,
+                        label: cp.label,
+                        symbolName: cp.symbol || '',
+                        interval: cp.interval || '',
+                        entry: cp.entry,
+                        sl: cp.sl,
+                        tp1: cp.tp1,
+                        tp2: cp.tp2,
+                    }
+                })
+            }
+            return out
+        }
+
+        const renderChart = () => {
+            if (!chart) return
+            const end = cursor.value
+            const start = Math.max(0, end - viewWindow.value + 1)
+            const view = []
+            const volArr = []
+            for (let i = start; i <= end; i++) {
+                const b = allBars[i]
+                view.push([b.open_time, b.open_price, b.close_price, b.low_price, b.high_price])
+                volArr.push({ value: [b.open_time, Number(b.volume) || 0] })
+            }
+            const current = end >= 0 ? allBars[end] : null
+            const priceFmt = (v) => Number(v).toFixed(v >= 1000 ? 1 : 2)
+            const isUp = current ? current.close_price >= current.open_price : true
+            const xMin = view.length ? view[0][0] : undefined
+            const xMax = view.length ? view[view.length-1][0] : undefined
+            chart.setOption({
+                series: [
+                    {
+                        name: 'K线', type: 'candlestick', data: view,
+                        markLine: {
+                            symbol: 'none',
+                            silent: true,
+                            label: {
+                                show: !!current,
+                                position: 'end',
+                                align: 'left',
+                                formatter: p => priceFmt(p.value),
+                                color: '#fff',
+                                backgroundColor: isUp ? 'rgba(52,199,89,0.92)' : 'rgba(255,59,48,0.92)',
+                                padding: [2, 7],
+                                borderRadius: 4,
+                                fontSize: 11,
+                                fontWeight: 600,
+                            },
+                            lineStyle: { type: 'dashed', color: '#0a84ff', width: 1, opacity: 0.7 },
+                            data: current ? [{ yAxis: current.close_price }] : [],
+                        },
+                    },
+                    {
+                        name: '成交量', type: 'bar', xAxisIndex: 1, yAxisIndex: 1, data: volArr,
+                        barMinWidth: 1,
+                        barMaxWidth: 14,
+                        itemStyle: {
+                            color: (p) => {
+                                const v = view[p.dataIndex]
+                                return v ? (v[2] >= v[1] ? 'rgba(52,199,89,0.55)' : 'rgba(255,59,48,0.55)') : 'rgba(142,142,147,0.4)'
+                            }
+                        },
+                    },
+                    {
+                        name: '信号', type: 'scatter', xAxisIndex: 0, yAxisIndex: 0, z: 10, animation: false,
+                        data: buildSignalMarks(),
+                        tooltip: {
+                            trigger: 'item',
+                            backgroundColor: 'rgba(255,255,255,0.98)',
+                            borderColor: '#ebedf0', borderWidth: 1,
+                            textStyle: { color: '#1d1d1f', fontSize: 12 },
+                            extraCssText: 'box-shadow: 0 4px 16px rgba(0,0,0,0.08); border-radius: 8px;',
+                            formatter: (params) => {
+                                const d = params.data && params.data._sig
+                                if (!d) return ''
+                                const row = (k, v) => `<div style="display:flex;justify-content:space-between;gap:18px;"><span style="color:#6e6e73">${k}</span><span style="font-weight:500;text-align:right;">${v}</span></div>`
+                                return `<div style="font-weight:600;margin-bottom:6px;">${d.direction || '信号'} · ${d.pattern || '—'}</div>` +
+                                    row('时间', d.label) +
+                                    row('品种', (d.symbolName || '—') + (d.interval ? ' ' + d.interval : '')) +
+                                    row('入场', fmtSignalPrice(d.entry)) +
+                                    row('止损', fmtSignalPrice(d.sl)) +
+                                    row('止盈 TP1', fmtSignalPrice(d.tp1)) +
+                                    row('止盈 TP2', fmtSignalPrice(d.tp2))
+                            }
+                        }
+                    }
+                ],
+                xAxis: [
+                    { min: xMin, max: xMax },
+                    { min: xMin, max: xMax },
+                ],
+            }, { lazyUpdate: true })
+        }
+
+        const initChart = () => {
+            const dom = document.getElementById('chart')
+            chart = echarts.init(dom, null, { renderer: 'canvas' })
+            chart.setOption({
+                backgroundColor: 'transparent',
+                animation: false,
+                tooltip: {
+                    trigger: 'axis', axisPointer: { type: 'cross' },
+                    backgroundColor: 'rgba(255,255,255,0.98)', borderColor: '#ebedf0', borderWidth: 1,
+                    textStyle: { color: '#1d1d1f', fontSize: 12 },
+                    extraCssText: 'box-shadow: 0 4px 16px rgba(0,0,0,0.08); border-radius: 8px;',
+                },
+                grid: [
+                    { left: '5%', right: '56px', top: '4%', height: '66%' },
+                    { left: '5%', right: '56px', top: '74%', height: '15%' },
+                ],
+                xAxis: [
+                    {
+                        type: 'time',
+                        gridIndex: 0,
+                        axisLine: { lineStyle: { color: '#e5e7eb' } },
+                        axisLabel: { show: false },
+                        splitLine: { show: false },
+                        axisTick: { show: false },
+                    },
+                    {
+                        type: 'time',
+                        gridIndex: 1,
+                        axisLine: { lineStyle: { color: '#e5e7eb' } },
+                        axisLabel: { color: '#6e6e73', fontSize: 11 },
+                        splitLine: { show: false },
+                        axisTick: { show: false },
+                    },
+                ],
+                yAxis: [
+                    {
+                        scale: true,
+                        gridIndex: 0,
+                        axisLabel: { color: '#424245', fontSize: 11, margin: 10, formatter: (v) => Number(v).toFixed(v >= 1000 ? 1 : 2) },
+                        splitLine: { lineStyle: { color: '#f0f2f5' } },
+                        axisLine: { show: false },
+                        axisTick: { show: false },
+                        splitArea: { show: false },
+                    },
+                    {
+                        gridIndex: 1,
+                        axisLabel: { show: false },
+                        splitLine: { show: false },
+                        axisLine: { show: false },
+                        axisTick: { show: false },
+                        scale: true,
+                    },
+                ],
+                dataZoom: [
+                    {
+                        type: 'slider',
+                        xAxisIndex: [0, 1],
+                        bottom: '2%',
+                        height: 16,
+                        borderColor: '#ebedf0',
+                        backgroundColor: '#fafbfc',
+                        dataBackground: { lineStyle: { color: '#d1d5db' }, areaStyle: { color: '#f0f2f5' } },
+                        selectedDataBackground: { lineStyle: { color: '#0a84ff' }, areaStyle: { color: 'rgba(10,132,255,0.12)' } },
+                        handleStyle: { color: '#fff', borderColor: '#0a84ff', borderWidth: 2 },
+                        textStyle: { color: '#6e6e73' },
+                    },
+                    { type: 'inside', xAxisIndex: [0, 1], zoomOnMouseWheel: true, moveOnMouseMove: true },
+                ],
+                series: [
+                    {
+                        name: 'K线', type: 'candlestick', data: [],
+                        barMinWidth: 1,
+                        barMaxWidth: 14,
+                        itemStyle: {
+                            color: '#34c759',
+                            color0: '#ff3b30',
+                            borderColor: '#34c759',
+                            borderColor0: '#ff3b30',
+                            borderWidth: 1,
+                        },
+                    },
+                    {
+                        name: '成交量', type: 'bar', xAxisIndex: 1, yAxisIndex: 1, data: [],
+                        barMinWidth: 1,
+                        barMaxWidth: 14,
+                    },
+                    {
+                        name: '信号', type: 'scatter', xAxisIndex: 0, yAxisIndex: 0, data: [], z: 10, animation: false,
+                        tooltip: {
+                            trigger: 'item',
+                            backgroundColor: 'rgba(255,255,255,0.98)',
+                            borderColor: '#ebedf0', borderWidth: 1,
+                            textStyle: { color: '#1d1d1f', fontSize: 12 },
+                            extraCssText: 'box-shadow: 0 4px 16px rgba(0,0,0,0.08); border-radius: 8px;',
+                        }
+                    }
+                ],
+            })
+        }
+
+        const pause = () => {
+            playing.value = false
+            if (timer) { clearTimeout(timer); timer = null }
+        }
+        const scheduleTick = () => { timer = setTimeout(tick, speedMs.value) }
+
+        const tick = () => {
+            if (!playing.value) return
+            if (cursor.value >= total.value - 1) { pause(); msg.value = '回放结束'; tipClass.value = 'ok'; return }
+            cursor.value++
+            if (nextCp.value < checkpoints.length) {
+                const cp = checkpoints[nextCp.value]
+                if (allBars[cursor.value].close_time >= cp.ts) {
+                    cp.done = true; cp.triggered = true
+                    pausedAtCp.value = cp; pausedAtCpTs.value = cp.ts
+                    nextCp.value++; pause(); renderChart(); return
+                }
+            }
+            renderChart(); scheduleTick()
+        }
+
+        const play = () => {
+            if (!ready.value || cursor.value >= total.value - 1) return
+            playing.value = true
+            pausedAtCp.value = null; pausedAtCpTs.value = 0
+            scheduleTick()
+        }
+        const togglePlay = () => { playing.value ? pause() : play() }
+
+        const step = () => {
+            if (!ready.value || playing.value || cursor.value >= total.value - 1) return
+            cursor.value++
+            if (nextCp.value < checkpoints.length) {
+                const cp = checkpoints[nextCp.value]
+                if (allBars[cursor.value].close_time >= cp.ts) {
+                    cp.done = true; cp.triggered = true
+                    pausedAtCp.value = cp; pausedAtCpTs.value = cp.ts
+                    nextCp.value++; renderChart(); return
+                }
+            }
+            renderChart()
+        }
+
+        const resume = () => { pausedAtCp.value = null; pausedAtCpTs.value = 0; play() }
+
+        const reset = () => {
+            pause(); cursor.value = -1; nextCp.value = 0
+            pausedAtCp.value = null; pausedAtCpTs.value = 0
+            checkpoints.forEach(cp => { cp.done = false; cp.triggered = false })
+            if (chart) { chart.clear(); initChart() }
+        }
+
+        const onSeek = (e) => {
+            pause()
+            let pos = parseInt(e.target.value, 10)
+            if (isNaN(pos)) return
+            if (pos < 0) pos = 0
+            if (pos >= total.value) pos = total.value - 1
+            cursor.value = pos
+            recalcCpState()
+            renderChart()
+        }
+
+        const recalcCpState = () => {
+            nextCp.value = checkpoints.length
+            const curClose = cursor.value >= 0 ? allBars[cursor.value].close_time : -Infinity
+            checkpoints.forEach((cp, i) => {
+                cp.done = cp.ts <= curClose
+                cp.triggered = false
+                if (cp.ts > curClose && nextCp.value === checkpoints.length) nextCp.value = i
+            })
+        }
+
+        const rebuildCheckpoints = () => {
+            checkpoints.sort((a, b) => a.ts - b.ts)
+            recalcCpState()
+        }
+
+        const importCheckpoints = () => {
+            const lines = cpText.value.split(/\r?\n/).map(l => l.trim()).filter(Boolean)
+            if (!lines.length) { msg.value = '请先填写检查点时间'; tipClass.value = 'err'; return }
+            const list = []; let bad = 0
+            for (const l of lines) {
+                const ts = parseTime(l)
+                if (ts == null) { bad++; continue }
+                list.push({ ts, label: fmt(ts), done: false, triggered: false, source: 'manual' })
+            }
+            for (let i = checkpoints.length - 1; i >= 0; i--) if (checkpoints[i].source === 'manual') checkpoints.splice(i, 1)
+            checkpoints.push(...list)
+            rebuildCheckpoints()
+            msg.value = bad ? `导入 ${list.length} 个，跳过 ${bad} 个无效` : `已导入 ${list.length} 个检查点`
+            tipClass.value = 'ok'
+        }
+
+        const importFile = (e) => {
+            const f = e.target.files[0]
+            if (!f) return
+            const reader = new FileReader()
+            reader.onload = () => { cpText.value = String(reader.result); importCheckpoints() }
+            reader.readAsText(f)
+            e.target.value = ''
+        }
+
+        const clearManual = () => {
+            for (let i = checkpoints.length - 1; i >= 0; i--) if (checkpoints[i].source === 'manual') checkpoints.splice(i, 1)
+            cpText.value = ''; recalcCpState()
+            msg.value = '检查点已清空'; tipClass.value = 'ok'
+        }
+
+        const splitRow = (line) => {
+            let s = line.trim()
+            if (s.startsWith('|')) s = s.slice(1)
+            if (s.endsWith('|')) s = s.slice(0, -1)
+            return s.split('|').map(c => c.trim())
+        }
+        const detectHeader = (cells) => {
+            if (!cells.some(c => c.includes('信号时间') || c.includes('时间'))) return null
+            const fields = [
+                ['signal_time', ['信号时间', '时间']],
+                ['symbol', ['品种']],
+                ['interval', ['K线周期', '周期']],
+                ['pattern', ['形态', '架构']],
+                ['direction', ['方向']],
+                ['entry', ['入场']],
+                ['sl', ['止损']],
+                ['tp1', ['止盈TP1', '止盈1', 'TP1']],
+                ['tp2', ['止盈TP2', '止盈2', 'TP2']],
+            ]
+            const map = {}
+            cells.forEach((c, i) => {
+                for (const [f, kws] of fields) {
+                    if (kws.some(k => c.includes(k))) { map[f] = i; break }
+                }
+            })
+            return Object.keys(map).length ? map : null
+        }
+        const parseSignals = (text) => {
+            const lines = (text || '').split(/\r?\n/).map(l => l.trim()).filter(Boolean)
+            if (!lines.length) return { signals: [], bad: 0 }
+            let headerMap = null, startIdx = 0
+            for (let i = 0; i < lines.length; i++) {
+                const hm = detectHeader(splitRow(lines[i]))
+                if (hm && hm.signal_time !== undefined) { headerMap = hm; startIdx = i + 1; break }
+            }
+            const toNum = (v) => {
+                const s = String(v == null ? '' : v).trim()
+                if (!s || s === '-' || s === '—' || s === '/') return null
+                const n = parseFloat(s.replace(/,/g, ''))
+                return isNaN(n) ? null : n
+            }
+            const out = []; let bad = 0
+            for (let i = startIdx; i < lines.length; i++) {
+                const line = lines[i]
+                if (/^[-|:\s]+$/.test(line)) continue
+                let cells
+                if (line.includes('|')) cells = splitRow(line)
+                else {
+                    cells = line.split(/\t/)
+                    if (cells.length < 4) cells = line.split(/[,，]/)
+                    if (cells.length < 4) cells = line.split(/\s+/)
+                    cells = cells.map(c => c.trim())
+                }
+                if (cells.length < 4) { bad++; continue }
+                const m = headerMap || { signal_time: 0, interval: 1, pattern: 2, direction: 3, entry: 4, sl: 5, tp1: 6, tp2: 7 }
+                const get = (f, d = '') => (m[f] !== undefined && cells[m[f]] !== undefined ? cells[m[f]] : d)
+                const t = parseTime(get('signal_time'))
+                if (t == null) { bad++; continue }
+                const dirRaw = get('direction')
+                const direction = dirRaw.includes('多') ? '做多' : dirRaw.includes('空') ? '做空' : dirRaw
+                out.push({
+                    ts: t, label: fmt(t),
+                    symbol: get('symbol', ''), interval: get('interval', ''),
+                    pattern: get('pattern', ''), direction,
+                    entry: toNum(get('entry')), sl: toNum(get('sl')),
+                    tp1: toNum(get('tp1')), tp2: toNum(get('tp2')),
+                    done: false, triggered: false, source: 'signal',
+                })
+            }
+            out.sort((a, b) => a.ts - b.ts)
+            return { signals: out, bad }
+        }
+
+        const importSignals = () => {
+            const { signals, bad } = parseSignals(signalText.value)
+            if (!signals.length) { msg.value = '未解析到信号，检查表格格式'; tipClass.value = 'err'; return }
+            for (let i = checkpoints.length - 1; i >= 0; i--) if (checkpoints[i].source === 'signal') checkpoints.splice(i, 1)
+            signals.forEach(s => checkpoints.push(s))
+            rebuildCheckpoints()
+            msg.value = bad ? `信号导入 ${signals.length} 个卡点，跳过 ${bad} 行` : `已导入 ${signals.length} 个信号卡点`
+            tipClass.value = 'ok'
+        }
+
+        const importSignalFile = (e) => {
+            const f = e.target.files[0]
+            if (!f) return
+            const reader = new FileReader()
+            reader.onload = () => { signalText.value = String(reader.result); importSignals() }
+            reader.readAsText(f)
+            e.target.value = ''
+        }
+
+        const clearSignals = () => {
+            for (let i = checkpoints.length - 1; i >= 0; i--) if (checkpoints[i].source === 'signal') checkpoints.splice(i, 1)
+            signalText.value = ''; recalcCpState()
+            msg.value = '信号卡点已清空'; tipClass.value = 'ok'
+        }
+
+        const cpStatusText = (cp) => {
+            if (cp.triggered && pausedAtCpTs.value === cp.ts) return '当前暂停'
+            if (cp.done) return '已过'
+            return '等待中'
+        }
+
+        const onKey = (e) => {
+            const tag = (document.activeElement && document.activeElement.tagName) || ''
+            if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
+            if (e.key === 'Enter') { if (!playing.value && ready.value) resume(); e.preventDefault() }
+            else if (e.key === ' ') { if (ready.value) { togglePlay(); e.preventDefault() } }
+        }
+
+        onMounted(() => {
+            initChart()
+            window.addEventListener('resize', () => chart && chart.resize())
+            window.addEventListener('keydown', onKey)
+        })
+        watch(viewWindow, (v) => {
+            try { localStorage.setItem('replay.viewWindow', String(v)) } catch (e) {}
+        })
+        onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
+
+        return {
+            startTime, endTime, interval, loading, msg, tipClass,
+            ready, playing, speedMs, viewWindow,
+            cursor, total, cursorTimeLabel, seekValue,
+            checkpoints, pausedAtCp, pausedAtCpTs, cpText, fileInput, showCp,
+            signalText, sigFileInput, showSignal, manualCount, signalCount, fmtNum,
+            rangeIndex, rangeLabel, showControls,
+            load, togglePlay, step, reset, resume,
+            onSeek, onRangeSlide,
+            importCheckpoints, importFile, clearManual,
+            importSignals, importSignalFile, clearSignals, cpStatusText,
+        }
+    },
+}).mount('#app')
+</script>
+
+<script>
+// ========== 数据同步（顶栏按钮，全局） ==========
+(function () {
+    const syncPanel = document.getElementById('syncPanel')
+    const syncLogs = document.getElementById('syncLogs')
+    const syncElapsed = document.getElementById('syncElapsed')
+    const syncStatusTag = document.getElementById('syncStatusTag')
+    const syncDbBtn = document.getElementById('syncDbBtn')
+    const syncDataBtn = document.getElementById('syncDataBtn')
+    const syncDbDot = document.getElementById('syncDbDot')
+    const syncDataDot = document.getElementById('syncDataDot')
+    const syncClearBtn = document.getElementById('syncClearBtn')
+    const syncCloseBtn = document.getElementById('syncCloseBtn')
+
+    let pollTimer = null
+    let pollStart = 0
+    let lastLogCount = 0
+
+    const openPanel = () => syncPanel.classList.add('open')
+    const closePanel = () => syncPanel.classList.remove('open')
+    syncCloseBtn.addEventListener('click', closePanel)
+    syncClearBtn.addEventListener('click', () => { syncLogs.innerHTML = ''; lastLogCount = 0 })
+
+    const setDots = (status) => {
+        const clsIdle = 'idle', clsRun = 'running', clsDone = 'done', clsErr = 'error'
+        const syncDbDot = document.getElementById('syncDbDot')
+        const syncDataDot = document.getElementById('syncDataDot')
+        const setDot = (el, cls) => { if (el) el.className = 'sync-dot ' + cls }
+        if (status.running) {
+            setDot(status.task === 'data' ? syncDataDot : syncDbDot, clsRun)
+            setDot(status.task === 'db' ? syncDataDot : syncDbDot, clsIdle)
+        } else if (status.finished_at) {
+            const ok = !status.summary || !status.summary.error
+            setDot(syncDbDot, clsIdle); setDot(syncDataDot, clsIdle)
+            if (status.task === 'data') setDot(syncDataDot, ok ? clsDone : clsErr)
+            else if (status.task === 'db') setDot(syncDbDot, ok ? clsDone : clsErr)
+        } else { setDot(syncDbDot, clsIdle); setDot(syncDataDot, clsIdle) }
+    }
+
+    const setStatusText = (status) => {
+        let label = '空闲', cls = 'idle'
+        if (status.running) { label = status.task === 'data' ? '正在抓取 K线' : '正在建表'; cls = 'running' }
+        else if (status.finished_at) {
+            const ok = !status.summary || !status.summary.error
+            label = ok ? '已完成' : '失败'; cls = ok ? 'done' : 'error'
+        }
+        syncStatusTag.className = 'sync-status-tag ' + cls
+        syncStatusTag.innerHTML = `<span class="sync-dot ${cls}"></span><span>${label}</span>`
+    }
+
+    const appendLogs = (logs) => {
+        if (!logs || logs.length === lastLogCount) return
+        const frag = document.createDocumentFragment()
+        for (let i = lastLogCount; i < logs.length; i++) {
+            const l = logs[i]
+            const row = document.createElement('div')
+            row.className = 'log-line ' + (l.level || 'info')
+            const t = document.createElement('span'); t.className = 'log-time'; t.textContent = l.time
+            const m = document.createElement('span'); m.className = 'log-msg'; m.textContent = l.msg
+            row.appendChild(t); row.appendChild(m)
+            frag.appendChild(row)
+        }
+        syncLogs.appendChild(frag)
+        syncLogs.scrollTop = syncLogs.scrollHeight
+        lastLogCount = logs.length
+    }
+
+    const tickElapsed = () => {
+        if (!pollStart) { syncElapsed.textContent = '--:--'; return }
+        const sec = Math.floor((Date.now() - pollStart) / 1000)
+        syncElapsed.textContent = `${String(Math.floor(sec/60)).padStart(2,'0')}:${String(sec%60).padStart(2,'0')}`
+    }
+
+    const pollStatus = async () => {
+        try {
+            const res = await fetch('/api/sync/status')
+            const json = await res.json()
+            const s = json.data || {}
+            if (s.running) {
+                if (!pollStart) pollStart = new Date(s.started_at || Date.now()).getTime()
+                tickElapsed()
+            } else {
+                pollStart = 0; tickElapsed()
+                if (pollTimer) { clearInterval(pollTimer); pollTimer = null }
+                syncDbBtn.disabled = false; syncDataBtn.disabled = false
+            }
+            setDots(s); setStatusText(s); appendLogs(s.logs || [])
+        } catch (e) { /* 静默 */ }
+    }
+
+    const startPolling = () => {
+        if (pollTimer) return
+        pollTimer = setInterval(pollStatus, 1500)
+        pollStatus()
+    }
+
+    syncDbBtn.addEventListener('click', async () => {
+        openPanel(); syncDbBtn.disabled = true; syncDataBtn.disabled = true
+        syncLogs.innerHTML = ''; lastLogCount = 0
+        try {
+            const res = await fetch('/api/sync/db', { method: 'POST' })
+            const json = await res.json()
+            if (json.code !== 200) {
+                alert('同步数据库失败：' + (json.msg || '未知错误'))
+                syncDbBtn.disabled = false; syncDataBtn.disabled = false
+            } else { pollStatus() }
+        } catch (e) {
+            alert('请求失败：' + e.message)
+            syncDbBtn.disabled = false; syncDataBtn.disabled = false
+        }
+    })
+
+    syncDataBtn.addEventListener('click', async () => {
+        openPanel()
+        syncLogs.innerHTML = '<div class="log-line info"><span class="log-time">--:--</span><span class="log-msg">⏳ 正在启动后台任务...</span></div>'
+        lastLogCount = 0
+        syncDbBtn.disabled = true; syncDataBtn.disabled = true
+        try {
+            const res = await fetch('/api/sync/data', { method: 'POST' })
+            const json = await res.json()
+            if (json.code !== 200) {
+                alert('启动同步失败：' + (json.msg || '未知错误'))
+                syncDbBtn.disabled = false; syncDataBtn.disabled = false
+            } else { startPolling() }
+        } catch (e) {
+            alert('请求失败：' + e.message)
+            syncDbBtn.disabled = false; syncDataBtn.disabled = false
+        }
+    })
+
+    pollStatus()
+})()
+</script>
+<script src="/static/components/topnav.js" defer></script></body>
+</html>

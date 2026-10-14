@@ -1,0 +1,954 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>交易惯性 · 每日交易 · 计划</title>
+    <link rel="stylesheet" href="/static/components/topnav.css">
+    <script src="/vendors/vue.global.prod.js"></script>
+    <style>
+        :root{
+            --bg:#f0f2f7; --panel:#ffffff; --panel-2:#fafbfc; --border:#ebedf0; --border-soft:#f0f2f5;
+            --text:#1d1d1f; --text-2:#424245; --text-muted:#6e6e73;
+            --accent:#0a84ff; --accent-2:#0066cc; --accent-soft:#e8f1ff;
+            --green:#34c759; --red:#ff3b30; --orange:#ff9500; --purple:#af52de; --teal:#0ab0a0;
+            --shadow-sm:0 1px 2px rgba(0,0,0,0.04);
+            --shadow:0 1px 3px rgba(0,0,0,0.04),0 4px 12px rgba(0,0,0,0.04);
+            --radius:16px; --radius-sm:10px; --radius-pill:999px;
+            --font:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",system-ui,sans-serif;
+        }
+        *{margin:0;padding:0;box-sizing:border-box;}
+        body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:13px;line-height:1.5;-webkit-font-smoothing:antialiased;}
+        .topnav{min-height:56px;height:auto;flex-wrap:wrap;background:#fff;border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 24px;gap:12px;position:sticky;top:0;z-index:100;}
+        .topnav-links::-webkit-scrollbar{display:none;}
+        .content{padding:18px 32px 56px;display:flex;flex-direction:column;gap:14px;max-width:none;margin:0;}
+        .page-heading{font-size:20px;font-weight:600;letter-spacing:-.2px;display:flex;align-items:center;gap:10px;}
+        .page-sub{font-size:13px;color:var(--text-muted);margin-top:3px;}
+
+        .card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-sm);padding:16px 18px;}
+        .card-title{font-size:14px;font-weight:600;display:flex;align-items:center;gap:8px;margin-bottom:12px;}
+        .card-title .ico{font-size:15px;}
+        .tip{font-size:12.5px;color:var(--text-muted);}
+        .muted{color:var(--text-muted);}
+
+        /* ===== Tab 切换 ===== */
+        .tabbar{display:flex;gap:6px;background:#fff;border:1px solid var(--border);border-radius:14px;padding:5px;box-shadow:var(--shadow-sm);width:max-content;max-width:100%;overflow-x:auto;scrollbar-width:none;}
+        .tabbar::-webkit-scrollbar{display:none;}
+        .tab-btn{display:inline-flex;align-items:center;gap:8px;padding:9px 18px;border:none;background:transparent;color:var(--text-muted);border-radius:10px;cursor:pointer;font-size:13.5px;font-weight:600;font-family:inherit;transition:all .15s;white-space:nowrap;}
+        .tab-btn:hover{background:#f0f2f5;color:var(--text);}
+        .tab-btn.active{background:var(--text);color:#fff;}
+        .tab-btn.active:hover{background:#000;}
+
+        /* ===== 汇总条(自查) ===== */
+        .verdict{border:1px solid var(--border);border-radius:var(--radius);background:linear-gradient(135deg,#fff,#f6f8ff);box-shadow:var(--shadow-sm);padding:18px 20px;display:flex;gap:22px;align-items:center;flex-wrap:wrap;}
+        .verdict-gauge{width:118px;height:118px;flex-shrink:0;position:relative;}
+        .verdict-gauge svg{width:100%;height:100%;transform:rotate(-90deg);}
+        .verdict-gauge .val{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;}
+        .verdict-gauge .val b{font-size:30px;font-weight:700;letter-spacing:-1px;line-height:1;}
+        .verdict-gauge .val span{font-size:11px;color:var(--text-muted);margin-top:3px;}
+        .verdict-text{flex:1;min-width:240px;}
+        .verdict-text .t{font-size:16px;font-weight:600;}
+        .verdict-text .d{font-size:13px;color:var(--text-2);margin-top:6px;line-height:1.7;}
+        .verdict-actions{display:flex;gap:8px;flex-direction:column;}
+
+        .btn{padding:8px 16px;border-radius:var(--radius-pill);border:none;cursor:pointer;font-size:13px;font-family:inherit;font-weight:500;transition:all .15s;display:inline-flex;align-items:center;gap:6px;line-height:1.2;}
+        .btn-primary{background:var(--text);color:#fff;}
+        .btn-primary:hover{background:#000;transform:translateY(-1px);}
+        .btn-ghost{background:transparent;color:var(--text-muted);}
+        .btn-ghost:hover{background:#f0f2f5;color:var(--text);}
+        .btn-danger-soft{background:#fdf0ef;color:var(--red);}
+        .btn-danger-soft:hover{background:#fbe3e1;}
+        .btn-accent{background:var(--accent);color:#fff;}
+        .btn-accent:hover{background:var(--accent-2);}
+        .btn-teal{background:var(--teal);color:#fff;}
+        .btn-teal:hover{background:#089a8d;}
+
+        /* ===== 惯性卡片(自查) ===== */
+        .habit-grid{display:flex;flex-direction:column;gap:12px;}
+        .habit{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-sm);overflow:hidden;}
+        .habit-head{display:flex;gap:14px;align-items:center;padding:15px 18px;cursor:pointer;user-select:none;}
+        .habit-no{width:38px;height:38px;border-radius:11px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:700;color:#fff;font-variant-numeric:tabular-nums;}
+        .habit-ico{font-size:19px;}
+        .habit-tit{flex:1;min-width:0;}
+        .habit-tit b{font-size:15px;font-weight:600;display:block;}
+        .habit-tit .en{font-size:11.5px;color:var(--text-muted);margin-top:2px;letter-spacing:.2px;}
+        .habit-state{flex-shrink:0;display:flex;align-items:center;gap:8px;}
+        .pill-count{font-size:11.5px;color:var(--text-muted);font-weight:600;}
+        .fold-caret{color:var(--text-muted);transition:transform .2s;}
+        .habit.open .fold-caret{transform:rotate(180deg);}
+        .habit-body{display:none;padding:0 18px 16px;}
+        .habit.open .habit-body{display:block;}
+        .habit-desc{background:var(--panel-2);border-left:3px solid var(--border);border-radius:0 8px 8px 0;padding:11px 14px;font-size:13px;line-height:1.7;color:var(--text-2);margin-bottom:12px;}
+        .checks{display:flex;flex-direction:column;gap:8px;}
+        .check{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;transition:all .15s;background:var(--panel);}
+        .check:hover{border-color:#d9dbe0;background:#fafbfc;}
+        .check.on{border-color:var(--orange);background:#fff8ec;}
+        .check .box{width:19px;height:19px;border-radius:6px;border:2px solid #c7cad1;flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:all .15s;color:#fff;font-size:12px;margin-top:1px;font-weight:700;}
+        .check.on .box{background:var(--orange);border-color:var(--orange);}
+        .check .txt{font-size:13px;color:var(--text-2);line-height:1.5;}
+        .habit-okbar{display:flex;align-items:center;gap:7px;margin-top:10px;background:#f0fbf3;border:1px solid #c8eccf;color:#1e7d33;border-radius:var(--radius-sm);padding:9px 12px;font-size:12.5px;font-weight:500;}
+        .habit-warnbar{display:flex;align-items:center;gap:7px;margin-top:10px;background:#fff4f3;border:1px solid #ffd9d6;color:#c0392b;border-radius:var(--radius-sm);padding:9px 12px;font-size:12.5px;font-weight:500;}
+
+        /* ===== 总结(自查) ===== */
+        .summary{background:linear-gradient(135deg,#1d1d1f,#33323f);border-radius:var(--radius);padding:22px 24px;color:#fff;box-shadow:var(--shadow);}
+        .summary .label{font-size:11.5px;color:#a8a6b4;letter-spacing:1.5px;font-weight:600;}
+        .summary .quote{font-size:17px;font-weight:600;line-height:1.7;margin-top:10px;}
+        .summary .quote em{color:#ff9f43;font-style:normal;}
+        .summary .more{font-size:13px;color:#c9c7d1;line-height:1.8;margin-top:12px;}
+
+        /* ===== 每日交易 · 金十 ===== */
+        .jin-loading{display:flex;align-items:center;gap:10px;color:var(--text-muted);font-size:13px;padding:18px;}
+        .spinner{width:18px;height:18px;border:2px solid #d9dbe0;border-top-color:var(--accent);border-radius:50%;animation:spin 0.8s linear infinite;}
+        @keyframes spin{to{transform:rotate(360deg);}}
+        .err-banner{background:#fff4f3;border:1px solid #ffd9d6;color:#c0392b;border-radius:var(--radius-sm);padding:12px 14px;font-size:13px;display:flex;align-items:center;gap:10px;justify-content:space-between;flex-wrap:wrap;}
+        .quote-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(168px,1fr));gap:10px;}
+        .quote-box{background:var(--panel-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:11px 13px;}
+        .quote-box .q-name{font-size:12px;color:var(--text-muted);font-weight:600;}
+        .quote-box .q-price{font-size:21px;font-weight:700;letter-spacing:-.5px;margin-top:2px;font-variant-numeric:tabular-nums;}
+        .quote-box .q-chg{font-size:12px;font-weight:600;margin-top:2px;font-variant-numeric:tabular-nums;}
+        .quote-box .q-time{font-size:10.5px;color:var(--text-muted);margin-top:4px;}
+        .up{color:var(--red);} .down{color:var(--green);} .flat{color:var(--text-muted);}
+
+        .cal-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:12px;}
+        .cal-stat{background:var(--panel-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px;text-align:center;}
+        .cal-stat .n{font-size:22px;font-weight:700;letter-spacing:-.5px;}
+        .cal-stat .k{font-size:11.5px;color:var(--text-muted);margin-top:2px;}
+        .cal-filter{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;align-items:center;}
+        .cal-chip{padding:4px 12px;border:1px solid var(--border);border-radius:var(--radius-pill);cursor:pointer;font-size:12px;font-family:inherit;color:var(--text-2);background:var(--panel);transition:all .15s;}
+        .cal-chip:hover{background:#f0f2f5;}
+        .cal-chip.on{background:var(--text);color:#fff;border-color:var(--text);}
+        .cal-table{width:100%;border-collapse:collapse;font-size:12.5px;}
+        .cal-table th{text-align:left;color:var(--text-muted);font-weight:600;font-size:11.5px;padding:7px 8px;border-bottom:1px solid var(--border);background:var(--panel-2);}
+        .cal-table td{padding:8px;border-bottom:1px solid var(--border-soft);vertical-align:top;}
+        .cal-table tr.today{background:#fffaf0;}
+        .cal-table tr.star-high{background:#f4f8ff;}
+        .cal-table tr:hover{background:#fafbfc;}
+        .cal-time{font-family:Consolas,monospace;color:var(--text-muted);white-space:nowrap;font-size:12px;}
+        .cal-affect{font-weight:700;font-size:12px;white-space:nowrap;}
+        .aff-bull{color:#c0392b;}  /* 利多 → 红(涨) */
+        .aff-bear{color:#1e7d33;}  /* 利空 → 绿(跌) */
+        .aff-neu{color:#6e6e73;}
+        .cal-star{color:var(--orange);letter-spacing:1px;font-size:11px;white-space:nowrap;}
+        .pill-tag{display:inline-flex;align-items:center;padding:2px 9px;border-radius:var(--radius-pill);font-size:11px;font-weight:700;}
+        .pt-bull{background:#fdecea;color:#c0392b;} .pt-bear{background:#eaf6ee;color:#1e7d33;} .pt-neu{background:#f0f2f5;color:#6e6e73;}
+
+        .flash-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+        .flash-col{border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;}
+        .flash-col-head{padding:8px 12px;font-size:12.5px;font-weight:700;background:var(--panel-2);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:6px;}
+        .flash-list{max-height:330px;overflow-y:auto;}
+        .flash-item{padding:8px 12px;border-bottom:1px solid var(--border-soft);font-size:12.5px;line-height:1.6;color:var(--text-2);}
+        .flash-item:last-child{border-bottom:none;}
+        .flash-item .t{font-family:Consolas,monospace;color:var(--text-muted);font-size:11px;margin-right:6px;}
+
+        /* ===== 黄金消息面（ 强相关） ===== */
+        .gold-news{display:grid;grid-template-columns:1fr 1.6fr;gap:14px;align-items:start;}
+        .card-sub{background:var(--panel-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;}
+        .gold-data-cols{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;}
+        .gn-stat{background:var(--panel-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 14px;min-width:120px;}
+        .gn-stat .n{font-size:20px;font-weight:700;}
+        .gn-stat .k{font-size:11px;color:var(--text-muted);}
+        .gn-type-bar{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;}
+        .gn-chip{padding:3px 11px;border:1px solid var(--border);border-radius:var(--radius-pill);cursor:pointer;font-size:11.5px;background:var(--panel);color:var(--text-2);font-family:inherit;}
+        .gn-chip.on{background:var(--text);color:#fff;border-color:var(--text);}
+        .gn-stream{max-height:560px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius-sm);}
+        .gn-item{padding:9px 12px;border-bottom:1px solid var(--border-soft);display:flex;gap:9px;align-items:flex-start;font-size:12.8px;line-height:1.65;color:var(--text-2);}
+        .gn-item:last-child{border-bottom:none;}
+        .gn-item:hover{background:#fafbfc;}
+        .gn-item .gt{font-family:Consolas,monospace;color:var(--text-muted);font-size:11px;white-space:nowrap;margin-top:1px;flex-shrink:0;}
+        .gn-item .gc{flex:1;}
+        .gn-item .gb{font-size:10px;font-weight:700;flex-shrink:0;}
+        .gn-tag{display:inline-block;font-size:10px;font-weight:700;padding:1px 6px;border-radius:4px;margin-left:5px;vertical-align:1px;}
+        .gn-t-讲话{background:#fdeaea;color:#b3271e;}
+        .gn-t-数据{background:#e8f0fe;color:#1a56c4;}
+        .gn-t-货币{background:#fdf0e0;color:#b45b0e;}
+        .gn-t-地缘{background:#e9f6ef;color:#17804a;}
+        .gn-t-央行{background:#f0eafa;color:#6a3fc4;}
+        .gn-t-市场{background:#fff2cf;color:#8a6d00;}
+        .gn-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:5px;}
+        .gd-bull{background:#c0392b;}  /* 利多=红 */
+        .gd-bear{background:#1e7d33;}  /* 利空=绿 */
+        .gd-neu{background:#c7c9cc;}
+        .gn-empty{padding:18px;color:var(--text-muted);font-size:13px;text-align:center;}
+        @media(max-width:980px){.gold-news{grid-template-columns:1fr;}}
+
+        /* ===== 整月  消息面日历 ===== */
+        .mc-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px;}
+        .mc-nav{display:inline-flex;align-items:center;gap:2px;}
+        .mc-nav button{border:1px solid var(--border);background:var(--panel);color:var(--text-2);border-radius:var(--radius-sm);width:28px;height:28px;cursor:pointer;font-size:14px;font-family:inherit;transition:all .15s;}
+        .mc-nav button:hover{background:#f0f2f5;}
+        .mc-nav .mc-cur{font-weight:700;font-size:15px;padding:0 10px;min-width:110px;text-align:center;color:var(--text);}
+        .mc-flt{border:1px solid var(--border);background:var(--panel);color:var(--text-2);border-radius:var(--radius-sm);padding:3px 10px;font-size:12px;cursor:pointer;font-family:inherit;transition:all .15s;white-space:nowrap;}
+        .mc-flt:hover{border-color:var(--accent);color:var(--accent);}
+        .mc-flt.on{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:700;}
+        /* 实况/前值/预期 三段差异化配色 */
+        .mc-seg{white-space:nowrap;margin-right:10px;display:inline-block;}
+        .mc-lab{color:#8a8f98;font-size:11px;margin-right:2px;}
+        .mc-act .v-act{color:#1e7d33;font-weight:700;}
+        .mc-act .v-act.hot{color:#c0392b;}
+        .mc-act .v-prev{color:#666666;}
+        .mc-act .v-cons{color:#2563eb;}
+        .pt-high{background:#eef4ff;color:#1a56c4;}
+        .mc-week{background:var(--panel-2);border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:10px;overflow:hidden;}
+        .mc-week-title{padding:7px 13px;font-size:12.5px;font-weight:700;background:linear-gradient(90deg,#f4f6fa,#fff);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+        .mc-week-title .wk-n{color:var(--accent);}
+        .mc-week-title .wk-flag{color:#1a56c4;}
+        .mc-table{width:100%;border-collapse:collapse;font-size:12.8px;}
+        .mc-table th{text-align:left;color:var(--text-muted);font-weight:600;font-size:11px;padding:6px 10px;border-bottom:1px solid var(--border);background:#fafbfc;}
+        .mc-table td{padding:8px 10px;border-bottom:1px solid var(--border-soft);vertical-align:top;line-height:1.5;}
+        .mc-table tr:last-child td{border-bottom:none;}
+        .mc-table tr.mc-today td{background:#fffaf0;}
+        .mc-table tr.mc-high td{background:#f4f8ff;}
+        .mc-date{white-space:nowrap;font-size:12.5px;color:var(--text);}
+        .mc-date .d{font-weight:700;}
+        .mc-date .w{color:var(--text-muted);font-size:11px;margin-left:2px;}
+        .mc-src{font-size:10px;font-weight:700;border-radius:4px;padding:1px 6px;white-space:nowrap;}
+        .mc-src-live{background:#fdecea;color:#c0392b;}  /* jin10实时=红 */
+        .mc-src-sched{background:#eef2f7;color:#6e6e73;}  /* 排期推算=灰 */
+        .mc-state{font-size:11px;font-weight:700;white-space:nowrap;padding:1px 7px;border-radius:4px;}
+        .mc-st-done{background:#eaf6ee;color:#1e7d33;}  /* 已公布=绿 */
+        .mc-st-pending{background:#fff2cf;color:#8a6d00;}  /* 待公布=黄 */
+        .mc-act{font-size:12.5px;font-variant-numeric:tabular-nums;}
+        .mc-hint{font-size:11px;color:var(--text-muted);line-height:1.5;}
+        .mc-src-note{font-size:11.5px;color:var(--text-muted);margin-top:4px;}
+        @media(max-width:760px){.mc-table th:nth-child(5),.mc-table td:nth-child(5){display:none;}}
+
+        /* ===== 交易计划 ===== */
+        .plan-layout{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start;}
+        @media(max-width:900px){.plan-layout{grid-template-columns:1fr;}.flash-grid{grid-template-columns:1fr;}}
+        .form-row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px;}
+        .form-field{flex:1;min-width:100px;}
+        label.fld{display:block;font-size:12px;color:var(--text-muted);margin-bottom:4px;font-weight:600;}
+        input[type=text],input[type=number],input[type=date],input[type=time],select,textarea{
+            padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;background:var(--panel-2);color:var(--text);width:100%;font-family:inherit;transition:border-color .15s,box-shadow .15s;}
+        textarea{resize:vertical;min-height:54px;}
+        input:focus,textarea:focus,select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(10,132,255,0.15);}
+        .dir-btn{display:inline-flex;gap:6px;}
+        .plan-hint{background:var(--accent-soft);border:1px solid #cfe3ff;border-radius:var(--radius-sm);padding:10px 13px;font-size:12.5px;line-height:1.7;color:#1d3a6b;margin-bottom:12px;}
+        .plan-item{border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:10px;background:var(--panel);}
+        .plan-item.done{border-color:#c8eccf;background:#f7fdf9;}
+        .plan-item-head{display:flex;align-items:center;gap:10px;}
+        .plan-item-head b{font-size:14px;flex:1;}
+        .plan-chip{display:inline-flex;align-items:center;gap:4px;padding:2px 9px;border-radius:var(--radius-pill);font-size:11px;font-weight:700;}
+        .plan-chip.done{background:#eaf6ee;color:#1e7d33;}
+        .plan-chip.open{background:#e8f1ff;color:#0066cc;}
+        .plan-chip.loss{background:#fdecea;color:#c0392b;}
+        .plan-chip.win{background:#fdecea;color:#c0392b;} /* 盈利红 */
+        .plan-meta{font-size:12px;color:var(--text-muted);margin-top:6px;line-height:1.7;}
+        .plan-meta b{color:var(--text-2);}
+        .plan-actions{margin-left:auto;display:flex;gap:6px;}
+
+        .src{font-size:11.5px;color:var(--text-muted);text-align:center;margin-top:18px;line-height:1.8;}
+        .src a{color:var(--accent);text-decoration:none;}
+        ::-webkit-scrollbar{width:8px;height:8px;}
+        ::-webkit-scrollbar-track{background:transparent;}
+        ::-webkit-scrollbar-thumb{background:rgba(0,0,0,.12);border-radius:4px;}
+        ::-webkit-scrollbar-thumb:hover{background:rgba(0,0,0,.2);}
+        .mt8{margin-top:8px;} .mt12{margin-top:12px;} .mt16{margin-top:16px;} .mb12{margin-bottom:12px;} .ml12{margin-left:12px;}
+    </style>
+</head>
+<body>
+<header class="topnav">
+    <topnav-bar class="topnav-links" data-active="/habits"></topnav-bar>
+</header>
+
+<div id="app">
+    <div class="content">
+        <div>
+            <h1 class="page-heading"><span class="habit-ico">📋</span>交易工作台 · 惯性自查 / 每日数据 / 作战计划</h1>
+            <div class="page-sub">一页集齐：交易惯性自查、金十当日数据与本周判向日历、以及「今天到底做不做、怎么做」的交易计划。</div>
+        </div>
+
+        <!-- Tab 条 -->
+        <div class="tabbar">
+            <button class="tab-btn" :class="{active: tab==='check'}" @click="tab='check'">🧠 交易惯性自查</button>
+            <button class="tab-btn" :class="{active: tab==='daily'}" @click="tab='daily';ensureDaily()">📈 每日交易 · 金十</button>
+            <button class="tab-btn" :class="{active: tab==='cal'}" @click="tab='cal';ensureDaily()">📅 本周财经日历</button>
+            <button class="tab-btn" :class="{active: tab==='plan'}" @click="tab='plan'">🎯 交易计划</button>
+        </div>
+
+        <!-- ═══════════ ① 交易惯性自查 ═══════════ -->
+        <div v-show="tab==='check'">
+            <div class="verdict">
+                <div class="verdict-gauge">
+                    <svg viewBox="0 0 118 118">
+                        <circle cx="59" cy="59" r="50" fill="none" stroke="#e8ebf0" stroke-width="11"/>
+                        <circle cx="59" cy="59" r="50" fill="none" stroke="#0a84ff" stroke-width="11" stroke-linecap="round"
+                            :stroke-dasharray="gaugeLen + ' 999'" :stroke-dashoffset="gaugeLen * (1 - pct)" :style="{transition:'stroke-dashoffset .5s ease'}"/>
+                    </svg>
+                    <div class="val">
+                        <b :style="{color: gaugeColor}">{{ checkedCount }}</b>
+                        <span>/ {{ totalItems }}</span>
+                    </div>
+                </div>
+                <div class="verdict-text">
+                    <div class="t" :style="{color: verdictColor}">{{ verdict.title }}</div>
+                    <div class="d">{{ verdict.desc }}</div>
+                </div>
+                <div class="verdict-actions">
+                    <button class="btn btn-ghost" @click="toggleAll">全展开 / 折叠</button>
+                    <button class="btn btn-danger-soft" @click="reset">↺ 重置全部勾选</button>
+                </div>
+            </div>
+
+            <div class="habit-grid mt12">
+                <div v-for="(h,i) in habits" :key="i" class="habit" :class="{open: h.open}">
+                    <div class="habit-head" @click="h.open=!h.open">
+                        <div class="habit-no" :style="{background: h.color}">{{ i+1 }}</div>
+                        <div class="habit-tit">
+                            <b>{{ h.ico }} {{ h.title }}</b>
+                            <span class="en">{{ h.en }}</span>
+                        </div>
+                        <div class="habit-state">
+                            <span class="pill-count" v-if="checkedOf(h)">{{ checkedOf(h) }}/{{ h.items.length }}</span>
+                            <svg class="fold-caret" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                        </div>
+                    </div>
+                    <div class="habit-body">
+                        <div class="habit-desc">{{ h.desc }}</div>
+                        <div class="checks">
+                            <div v-for="(it, j) in h.items" :key="j" class="check" :class="{on: h.done[j]}" @click="toggle(i,j)">
+                                <span class="box">{{ h.done[j] ? '✓' : '' }}</span>
+                                <span class="txt">{{ it }}</span>
+                            </div>
+                        </div>
+                        <div v-if="h.done.every(Boolean)" class="habit-okbar">✅ 这条你有自我觉察——别再用它伤害账户，针对它立一条硬规则。</div>
+                        <div v-else class="habit-warnbar" v-show="checkedOf(h)>0">⚠ 命中 {{ checkedOf(h) }} 项即属高危惯性，交易前先对照这条叫停。</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="summary mt12">
+                <div class="label">CORE INSIGHT · 归到一点</div>
+                <div class="quote">交易是<em>反人性</em>的，而我们在用最顺人性的方式操作。真正的高手不是没犯过错，而是<em>绝不在这些根本性问题上反复跌倒</em>。</div>
+                <div class="more">如果此刻仍深陷亏损泥潭，不妨停下来，重新审视自己、做调整。这九个惯性本可以归结为一句：<b>把「希望」换成「规则」，把「情绪」换成「纪律」，把「重蹈」换成「复盘」</b>——长期存活靠的是稳定、可重复、被数据验证过的逻辑，而不是每一次的随机出手。</div>
+            </div>
+        </div>
+
+        <!-- ═══════════ ② 每日交易 · 金十 ═══════════ -->
+        <div v-show="tab==='daily'">
+            <!-- 行情 -->
+            <div class="card">
+                <div class="card-title"><span class="ico">💰</span>金十 · 实时行情
+                    <button class="btn btn-ghost ml12" style="margin-left:auto" @click="loadDaily(true)">↻ 刷新</button>
+                </div>
+                <div v-if="dailyLoading && !Object.keys(quotes).length" class="jin-loading"><span class="spinner"></span>正在拉取金十行情…</div>
+                <div v-else-if="dailyErr" class="err-banner">
+                    <span>⚠ {{ dailyErr }}（已展示缓存数据，请点击重试）</span>
+                    <button class="btn btn-ghost" @click="loadDaily(true)">重试</button>
+                </div>
+                <div v-else class="quote-grid">
+                    <div v-for="(q,c) in quotes" :key="c" class="quote-box">
+                        <div class="q-name">{{ q.name || c }}</div>
+                        <div class="q-price" :class="chgClass(q)">{{ q.close }}</div>
+                        <div class="q-chg" :class="chgClass(q)">{{ arrow(q) }} {{ q.ups_price }}  ({{ q.ups_percent }}%)</div>
+                        <div class="q-time">高 {{ q.high }} · 低 {{ q.low }}</div>
+                    </div>
+                </div>
+                <div class="tip mt8" v-if="quotesTs">更新于 {{ fmtTs(quotesTs) }}（行情缓存 30s）</div>
+            </div>
+
+            <!-- 本周财经日历 + 判向：已迁至独立 tab「📅 本周财经日历」 -->
+
+            <!-- ═══════ 整月  消息面日历 ═══════ -->
+            <div class="card mt12" id="month-cal">
+                <div class="card-title"><span class="ico">🗓️</span>整月  消息面日历
+                    <span class="pill-tag pt-neu">schedule+金十实时</span>
+                    <span class="tip" style="margin-left:auto">非农 / CPI / PCE / FOMC / PPI / 初请 等黄金主线，按周排布</span>
+                    <button class="btn btn-ghost ml12" @click="loadMonthCal(true)">↻ 刷新</button>
+                </div>
+                <div class="mc-head">
+                    <div class="mc-nav">
+                        <button @click="mcShift(-1)">‹</button>
+                        <span class="mc-cur">{{ mcLabel }}</span>
+                        <button @click="mcShift(1)">›</button>
+                    </div>
+                    <button class="btn btn-ghost" @click="mcGoNow()">回到本月</button>
+                    <div style="display:inline-flex;gap:6px;align-items:center;margin-left:12px;flex-wrap:wrap">
+                        <button class="mc-flt" :class="{on: mcFUs}" @click="mcFUs=!mcFUs">🇺🇸 只看美国</button>
+                        <button class="mc-flt" :class="{on: mcFHigh}" @click="mcFHigh=!mcFHigh">★4以上</button>
+                        <button class="mc-flt" :class="{on: mcFNoJob}" @click="mcFNoJob=!mcFNoJob">排除初请</button>
+                        <button v-if="mcHasFilter" class="btn btn-ghost" @click="mcResetFilter">清除</button>
+                    </div>
+                    <div class="mc-stat" style="display:inline-flex;gap:6px;align-items:center;margin-left:auto;flex-wrap:wrap">
+                        <span class="pill-tag pt-bull">{{ mcJin }}</span>
+                        <span class="pill-tag pt-neu">排期 {{ mcSched }}</span>
+                        <span v-if="mcHasFilter" class="pill-tag pt-high">筛出 {{ mcFilteredCount }}</span>
+                    </div>
+                </div>
+                <div v-if="mcLoading && !mcRaw.length" class="jin-loading"><span class="spinner"></span>正在生成 {{ mcLabel }}  消息面日历…</div>
+                <div v-else-if="mcErr" class="err-banner">
+                    <span>⚠ {{ mcErr }}</span>
+                    <button class="btn btn-ghost" @click="loadMonthCal(true)">重试</button>
+                </div>
+                <template v-else-if="mcWeeksShown.length">
+                    <div v-for="(wk,wi) in mcWeeksShown" :key="wk.week_start" class="mc-week">
+                        <div class="mc-week-title">
+                            <span class="wk-n">第{{ wi+1 }}周</span>
+                            <span class="wk-flag">{{ mcWeekRange(wk) }}</span>
+                            <span class="tip" style="margin-left:auto">{{ wk.events.length }} 项事件</span>
+                        </div>
+                        <table class="mc-table">
+                            <thead><tr><th style="width:72px">日期</th><th style="width:56px">时间</th><th style="width:34%">事件</th><th style="width:64px">星级</th><th style="width:215px">实况 / 前值 / 预期</th><th>黄金含义提示</th></tr></thead>
+                            <tbody>
+                                <tr v-for="(e,i) in wk.events" :key="wi+'-'+i"
+                                    :class="{'mc-today': e.date===mcTodayStr, 'mc-high': e.star>=4}">
+                                    <td class="mc-date"><span class="d">{{ mcD(e.date) }}</span><span class="w">{{ e.weekday }}</span></td>
+                                    <td class="cal-time">{{ e.time }}</td>
+                                    <td>
+                                        <span class="mc-src" :class="e.source==='jin10'?'mc-src-live':'mc-src-sched'">{{ e.source==='jin10'?'金十实时':'排期推算' }}</span>
+                                        <span v-if="e.extra && e.extra.state" class="mc-state" :class="e.extra.state==='已公布'?'mc-st-done':'mc-st-pending'">{{ e.extra.state }}</span>
+                                        <span class="ev-title" style="font-weight:600;margin-left:5px">{{ e.title }}</span>
+                                    </td>
+                                    <td class="cal-star">{{ starSym(e.star) }}</td>
+                                    <td class="mc-act">
+                                        <template v-if="e.extra && e.extra.state==='已公布'">
+                                            <span class="mc-seg"><span class="mc-lab">实况</span><b :class="mcActCls(e)">{{ e.extra.actual ?? '—' }}</b></span>
+                                            <span class="mc-seg"><span class="mc-lab">前</span><span class="v-prev">{{ e.extra.previous ?? '—' }}</span></span>
+                                            <span class="mc-seg"><span class="mc-lab">预期</span><span class="v-cons">{{ e.extra.consensus ?? '—' }}</span></span>
+                                        </template>
+                                        <template v-else-if="e.extra && e.extra.state==='待公布'">
+                                            <span class="mc-seg"><span class="mc-lab">预期</span><span class="v-cons">{{ e.extra.consensus ?? '—' }}</span></span>
+                                            <span class="mc-seg"><span class="mc-lab">前</span><span class="v-prev">{{ e.extra.previous ?? '—' }}</span></span>
+                                        </template>
+                                        <span v-else class="tip">—</span>
+                                    </td>
+                                    <td class="mc-hint">{{ e.hint || (e.source==='schedule'?'官方定期排期':(e.extra&&e.extra.affect_txt?('金十判向：'+e.extra.affect_txt):'')) }}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="mc-src-note">说明：<span class="mc-src mc-src-live">金十实时</span> 为该自然周内金十数据已披露的行（含实况值，当周未来项标「待公布」+共识/前值）；<span class="mc-src mc-src-sched">排期推算</span> 为美国宏观定期排期（美联储 FOMC 官方日程 + BLS/商务部排期锚点；2027 年起按官方/预测锚点+规律引擎推导）推导，本月为未来周或其它月暂无金十实时覆盖。逐条都标注来源，不混淆。筛选：🇺🇸只看美国 / ★4以上 / 排除初请 可叠加。</div>
+                </template>
+                <div v-else class="tip">{{ mcLabel }} 暂无事件{{ mcHasFilter ? '（筛选后为空，点“清除”查看全部）' : '或获取失败' }}。</div>
+            </div>
+
+            <!-- ═══════ 黄金消息面（ 强相关） ═══════ -->
+            <div class="card mt12" id="gold-news">
+                <div class="card-title"><span class="ico">🟡</span>黄金消息面 ·  强相关
+                    <span class="pill-tag pt-bull" v-if="goldBull">利多 {{ goldBull }}</span>
+                    <span class="pill-tag pt-bear" v-if="goldBear">利空 {{ goldBear }}</span>
+                    <span class="tip" style="margin-left:auto">CPI / 非农 / 美联储利率 / 官员讲话 / 避险地缘 实时监控</span>
+                    <button class="btn btn-ghost ml12" @click="loadGoldNews(true)">↻ 刷新</button>
+                </div>
+                <div v-if="goldLoading && !goldEvRaw.length" class="jin-loading"><span class="spinner"></span>正在拉取黄金消息面…</div>
+                <div v-else-if="goldErr" class="err-banner">
+                    <span>⚠ {{ goldErr }}</span>
+                    <button class="btn btn-ghost" @click="loadGoldNews(true)">重试</button>
+                </div>
+                <template v-else-if="goldEvRaw.length || goldDeRaw.length">
+                    <div class="gold-news">
+                        <!-- 左：本周黄金高影响数据事件 -->
+                        <div class="card-sub">
+                            <div class="gn-type-bar">
+                                <div class="gn-stat"><div class="n" style="color:#1d1d1f">{{ goldDataTot }}</div><div class="k">黄金相关数据</div></div>
+                                <div class="gn-stat"><div class="n" style="color:var(--orange)">{{ goldHighData }}</div><div class="k">高星(≥3)</div></div>
+                                <div class="gn-stat"><div class="n" style="color:var(--accent)">{{ goldUsData }}</div><div class="k">美国数据</div></div>
+                            </div>
+                            <table class="cal-table">
+                                <thead><tr><th style="width:84px">时间</th><th style="width:60px">判向</th><th>事件</th><th style="width:40px">★</th><th style="width:64px">前值</th></tr></thead>
+                                <tbody>
+                                    <tr v-for="(r,i) in goldDeShown" :key="'de'+i" :class="{'star-high': (r.star||0)>=3}">
+                                        <td class="cal-time">{{ fmtCalTime(r.pub_time) }}</td>
+                                        <td><span class="pill-tag" :class="deAffClass(r)">{{ deAffText(r) }}</span></td>
+                                        <td>{{ r.us?'🇺🇸 ':'' }}{{ r.title }}</td>
+                                        <td class="cal-star">{{ starSym(r.star) }}</td>
+                                        <td>{{ r.previous ?? '—' }}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                            <div class="tip mt8" style="font-size:11px">🇺🇸=美国/美联储事件（对金价影响最直接）；判向来自金十 affect_txt。</div>
+                        </div>
+                        <!-- 右：实时消息面流 -->
+                        <div class="card-sub">
+                            <div class="gn-type-bar">
+                                <button class="gn-chip" :class="{on: goldTypeF==='全部'}" @click="goldTypeF='全部'">全部 {{ goldEvRaw.length }}</button>
+                                <button class="gn-chip" :class="{on: goldTypeF==='讲话'}" @click="goldTypeF='讲话'">🗣 讲话</button>
+                                <button class="gn-chip" :class="{on: goldTypeF==='数据'}" @click="goldTypeF='数据'">📊 数据</button>
+                                <button class="gn-chip" :class="{on: goldTypeF==='货币'}" @click="goldTypeF='货币'">🏦 货币</button>
+                                <button class="gn-chip" :class="{on: goldTypeF==='地缘'}" @click="goldTypeF='地缘'">🌍 地缘</button>
+                                <button class="gn-chip" :class="{on: goldTypeF==='央行'}" @click="goldTypeF='央行'">🏛 央行</button>
+                            </div>
+                            <div class="gn-stream">
+                                <div v-if="!shownGoldEv.length" class="gn-empty">该类型下暂无消息。</div>
+                                <div v-for="(e,i) in shownGoldEv" :key="'ge'+i" class="gn-item">
+                                    <span class="gn-dot" :class="goldDotCls(e.affect)"></span>
+                                    <span class="gt">{{ goldT(e.time) }}</span>
+                                    <span class="gc">{{ e.content }}<span class="gn-tag" :class="'gn-t-'+e.type">{{ typeLabel(e.type) }}</span></span>
+                                </div>
+                            </div>
+                            <div class="tip mt8" style="font-size:11px">● 利多=红 / 利空=绿 / 灰=中性（按标题词粗判，仅供参考）；数据更新缓存 4min，点刷新强制拉最新。</div>
+                        </div>
+                    </div>
+                </template>
+                <div v-else class="tip">黄金消息面暂无数据或获取失败。</div>
+            </div>
+
+            <!-- 主题快讯 -->
+            <div class="card mt12">
+                <div class="card-title"><span class="ico">📰</span>金十 · 分主题快讯（黄金 / 原油 / 美联储 / 美元 / 地缘 / 美股）</div>
+                <div v-if="dailyLoading && !Object.keys(flash).length" class="jin-loading"><span class="spinner"></span>拉取主题快讯…</div>
+                <div v-else-if="!Object.keys(flash).length" class="tip">暂无快讯。</div>
+                <div v-else class="flash-grid">
+                    <div v-for="(items,key) in flash" :key="key" class="flash-col">
+                        <div class="flash-col-head"><span>{{ flashIcon[key] || '📌' }}</span>{{ flashTitle[key] || key }}<span class="muted" style="font-weight:500;font-size:11px">({{ items.length }})</span></div>
+                        <div class="flash-list">
+                            <div v-if="!items.length" class="flash-item muted">无相关快讯</div>
+                            <div v-for="(it,k) in items" :key="k" class="flash-item">
+                                <span class="t">{{ fmtFlashTime(it.time) }}</span>{{ shortFlash(it) }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══════════ ②′ 本周财经日历（独立 tab，黄金聚焦） ═══════════ -->
+        <div v-show="tab==='cal'">
+            <div class="card">
+                <div class="card-title"><span class="ico">📅</span>金十 · 本周财经日历 <span class="pill-tag pt-neu">已含利多/利空判向</span>
+                    <span class="tip" style="margin-left:8px">利多为红(↑)，利空为绿(↓)；高亮=今日，蓝条=高星级大事件</span>
+                    <button class="btn btn-ghost ml12" style="margin-left:auto" @click="loadDaily(true)">↻ 刷新</button>
+                </div>
+                <div v-if="dailyLoading && !calRaw.length" class="jin-loading"><span class="spinner"></span>正在拉取本周日历…</div>
+                <div v-else-if="!calRaw.length" class="tip">本周暂无日历数据或获取失败。</div>
+                <template v-else>
+                    <div class="cal-summary">
+                        <div class="cal-stat"><div class="n" style="color:#1d1d1f">{{ calTot }}</div><div class="k">本周事件</div></div>
+                        <div class="cal-stat"><div class="n" style="color:#c0392b">{{ calBull }}</div><div class="k">利多黄金</div></div>
+                        <div class="cal-stat"><div class="n" style="color:#1e7d33">{{ calBear }}</div><div class="k">利空黄金</div></div>
+                        <div class="cal-stat"><div class="n" style="color:var(--orange)">{{ calHighStar }}</div><div class="k">高星级(≥3)</div></div>
+                        <div class="cal-stat"><div class="n" style="color:var(--accent)">{{ calToday }}</div><div class="k">今日</div></div>
+                    </div>
+                    <div class="tip mt8" style="font-size:11px">当前口径：{{ calTot }} 条 ／ 全周共 {{ calAllN }} 条，其中黄金相关 {{ calGoldN }} 条；统计卡随下方筛选实时联动。</div>
+                    <div class="cal-filter">
+                        <button class="cal-chip" :class="{on: calGold}" @click="calGold=!calGold">🟡 黄金相关{{ calGold ? '·开' : '·关' }}</button>
+                        <button class="cal-chip" :class="{on: calFilter==='all'}" @click="calFilter='all'">全部</button>
+                        <button class="cal-chip" :class="{on: calFilter==='bull'}" @click="calFilter='bull'">利多</button>
+                        <button class="cal-chip" :class="{on: calFilter==='bear'}" @click="calFilter='bear'">利空</button>
+                        <button class="cal-chip" :class="{on: calFilter==='high'}" @click="calFilter='high'">高星级</button>
+                        <button class="cal-chip" :class="{on: calFilter==='today'}" @click="calFilter='today'">今日</button>
+                    </div>
+                    <table class="cal-table">
+                        <thead><tr><th style="width:88px">时间</th><th style="width:96px">判向</th><th>事件</th><th style="width:44px">星级</th><th style="width:110px">前值</th><th style="width:110px">预期</th><th style="width:110px">实际</th></tr></thead>
+                        <tbody>
+                            <tr v-for="r in shownCal" :key="r._k" :class="{today: r._today, 'star-high': r._high}">
+                                <td class="cal-time">{{ fmtCalTime(r.pub_time) }}</td>
+                                <td><span class="pill-tag" :class="affClass(r.affect_txt)">{{ affText(r.affect_txt) }}</span></td>
+                                <td>{{ calIsUs(r.title) ? '🇺🇸 ' : '' }}{{ r.title }}</td>
+                                <td class="cal-star">{{ starSym(r.star) }}</td>
+                                <td>{{ r.previous ?? '—' }}</td>
+                                <td>{{ r.consensus ?? '—' }}</td>
+                                <td><b>{{ r.actual ?? '—' }}</b></td>
+                            </tr>
+                            <tr v-if="!shownCal.length"><td colspan="7" class="tip" style="padding:14px">该筛选下暂无事件</td></tr>
+                        </tbody>
+                    </table>
+                </template>
+            </div>
+        </div>
+
+        <!-- ═══════════ ③ 交易计划 ═══════════ -->
+        <div v-show="tab==='plan'">
+            <div class="plan-layout">
+                <!-- 新建计划 -->
+                <div class="card">
+                    <div class="card-title"><span class="ico">✍️</span>新建交易计划（今日）</div>
+                    <div class="plan-hint">怎么用：先想清「<b>今天该不该交易</b>」——没有明确信号的行情，最好的计划是「空仓」。真要入场，就把方向 / 入场 / 止损 / 目标 / 手数 / 信号确认全部写死，盘中只执行、不临场改。</div>
+                    <div class="form-row">
+                        <div class="form-field" style="flex:0 0 92px"><label class="fld">日期</label><input type="date" v-model="plan.date"></div>
+                        <div class="form-field"><label class="fld">品种</label><input type="text" v-model="plan.symbol" placeholder=""></div>
+                        <div class="form-field"><label class="fld">方向</label>
+                            <div class="dir-btn">
+                                <button class="btn btn-soft" :class="{active:plan.direction==='多','btn-danger-soft':plan.direction==='多'}" @click="plan.direction='多'">做多 ↑</button>
+                                <button class="btn btn-soft" :class="{active:plan.direction==='空','btn-danger-soft':plan.direction==='空'}" @click="plan.direction='空'">做空 ↓</button>
+                                <button class="btn btn-soft" :class="{active:plan.direction==='观望'}" @click="plan.direction='观望'">观望</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-field"><label class="fld">入场价</label><input type="number" v-model="plan.entry" placeholder="如 4450"></div>
+                        <div class="form-field"><label class="fld">止损 SL</label><input type="number" v-model="plan.sl" placeholder="止损位"></div>
+                        <div class="form-field"><label class="fld">目标 TP</label><input type="number" v-model="plan.tp" placeholder="止盈位"></div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-field" style="flex:0 0 110px"><label class="fld">手数/仓位</label><input type="number" step="0.01" v-model="plan.lot" placeholder="0.05"></div>
+                        <div class="form-field"><label class="fld">信号确认（触发才做）</label><input type="text" v-model="plan.signal" placeholder="例：1H 站上 4480 + 回踩不破"></div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-field"><label class="fld">做单理由（一句话因果）</label><input type="text" v-model="plan.why" placeholder="例：利多数据落地回踩确认，顺势追多"></div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-field"><label class="fld">交易风险提醒 / 备注</label><textarea v-model="plan.note" placeholder="写下最需要盯住的风险，或提醒自己别犯哪个惯性（可回看①自查）"></textarea></div>
+                    </div>
+                    <div v-if="riskCalc" class="plan-hint" style="background:#f0fbf3;border-color:#c8eccf;color:#1e7d33">
+                        R:R = <b>{{ riskCalc.rr }}</b> · 若 1% 止损于 {{ riskCalc.slDist }} 点 → 每 0.01 手风险约 <b>{{ riskCalc.riskPer }}</b>（参考，请按你的账户与手数核）
+                    </div>
+                    <div class="mt12">
+                        <button class="btn btn-primary" @click="savePlan" :disabled="!plan.symbol || !plan.direction">💾 保存计划</button>
+                        <button class="btn btn-ghost" @click="clearPlanForm">清空</button>
+                        <span class="tip" style="margin-left:8px">保存在本机浏览器</span>
+                    </div>
+                </div>
+
+                <!-- 今日计划列表 -->
+                <div class="card">
+                    <div class="card-title"><span class="ico">🗂️</span>我的计划
+                        <button class="btn btn-ghost" style="margin-left:auto" @click="loadPlans">↻</button>
+                    </div>
+                    <div v-if="!plans.length" class="tip">还没有计划。上方新建一条「今日计划」。</div>
+                    <div v-for="p in plans" :key="p.id" class="plan-item" :class="{done: p.status==='done'}">
+                        <div class="plan-item-head">
+                            <b>{{ p.symbol }} · {{ p.direction }} {{ p.entry ? ' @'+p.entry : '' }}</b>
+                            <span class="plan-chip" :class="statusChip(p.status)">{{ statusText(p.status) }}</span>
+                            <div class="plan-actions">
+                                <button class="btn btn-ghost" style="padding:4px 10px;font-size:12px" @click="advanceStatus(p.id)">✓ 状态+1</button>
+                                <button class="btn btn-ghost" style="padding:4px 10px;font-size:12px;color:var(--red)" @click="delPlan(p.id)">删除</button>
+                            </div>
+                        </div>
+                        <div class="plan-meta">
+                            <div v-if="p.date"><b>日期：</b>{{ p.date }} · </div>
+                            <span v-if="p.sl||p.tp"><b>SL</b> {{ p.sl||'—' }} / <b>TP</b> {{ p.tp||'—' }} · </span>
+                            <span v-if="p.lot"><b>仓位</b> {{ p.lot }} · </span>
+                            <span v-if="p.signal"><b>信号</b> {{ p.signal }}</span>
+                        </div>
+                        <div class="plan-meta" v-if="p.why"><b>理由：</b>{{ p.why }}</div>
+                        <div class="plan-meta" v-if="p.note" style="color:var(--text-2)">{{ p.note }}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="src">交易惯性自查内容来源：Flora算法实验室 ·《对照自查！9 个让你持续亏损的交易惯性》，2026-05-31 ｜ 金十数据：经金十数据 MCP 代理获取，日历为「当前自然周」含利多/利空判向。<br>本页为交易辅助工具，非投资建议；数据仅供决策参考，实盘风险自负。勾选与计划仅存本机浏览器。</div>
+    </div>
+</div>
+
+<script>
+const { createApp, ref, reactive, computed, onMounted } = Vue
+
+const HABITS = [
+    { en: 'PLANLESS · TRADING ON IMPULSE', ico: '🎲', color: '#0a84ff', title: '无计划交易 · 跟风追涨杀跌', desc: '大多数人的交易没有任何结构化规划、也没有固定标准——看到别人做单就跟风，看到盘面异动就追，完全把主观的希望当成了交易依据。而长期生存需要稳定、可重复的逻辑支撑；无计划的入场充满随机性，自然无法形成持续盈利的闭环。', items: ['多数入场没有成文计划（方向 / 入场 / 止损 / 目标没写清）','看到别人赚钱、或盘面一异动就冲动进场','把「我觉得会涨 / 会跌」当依据，而非自己的规则信号'] },
+    { en: 'NO EDGE · BLINDLY COPYING STRATEGIES', ico: '🎭', color: '#5856d6', title: '无交易优势 · 盲目套用网络策略', desc: '入市很久仍始终不清楚自己靠什么赚钱。随手在网上找个策略、听到别人赚钱就直接用——既不了解它内在的逻辑，也不清楚它匹配什么行情场景，更不做历史回测、不知道它的盈亏规律。没有数据验证的交易，本质是盲目博弈，时间一久自然亏损离场。', items: ['说不清自己这套交易「到底靠什么逻辑赚钱」','直接套用网络 / 他人的策略，未验证它适合什么行情','从未对该策略做过历史回测，也不了解其盈亏分布'] },
+    { en: 'UNREALISTIC EXPECTATION · CHASING GET-RICH', ico: '🚀', color: '#ff3b30', title: '预期失实 · 追逐短期暴富', desc: '网络上充斥着快速致富、夸张收益的言论，让很多人产生不切实际的预期，以为交易是轻松致富的捷径，一心只想短期暴富。但高收益必然伴随高风险，市场里长久稳定的回报，从来都是循序渐进积累来的。期望脱离现实，心态就会浮躁，进而滑向「高胜率 / 高频」的错觉。', items: ['期望短期内翻倍、快速致富，而非稳定的长期回报','会被「某某收益夸张」的故事吸引、心态浮躁','低估「高收益 = 高风险」，把暴富当成了可实现目标'] },
+    { en: 'OVERSIZING · NO PER-TRADE RISK', ico: '⚖️', color: '#ff9500', title: '重仓 · 不衡量单次资金风险', desc: '绝大多数交易者习惯把重心放在预判涨跌上，交易时习惯性重仓、过度放大仓位，从来不衡量单次开仓所应对应的资金风险。哪怕胜率不低，长期处在这种高风险模式下，只要连续几次失误账户就快速缩水；一旦大额亏损出现，心态瞬间崩塌，陷入「急着纠正 → 越急越乱」的恶性循环。', items: ['经常以过重仓位入场，未按「单笔可承受风险」计算手数','单笔亏损额度可能显著伤及本金、波及心态','连亏几次就会明显影响后续判断与操作'] },
+    { en: 'OVERTRADING · CANNOT SIT FLAT', ico: '🔁', color: '#af52de', title: '频繁交易 · 无法忍受空仓', desc: '很多人潜意识里认为交易越频繁、手里机会就越多，根本无法忍受空仓——没有适合的信号也要硬做。频繁交易不仅累积高额交易成本，还会让精神疲惫、影响判断。耐心等待高性价比的行情，远比盲目出手重要。', items: ['一天不做单就手痒、空仓难受，总想找点事做','没有适配信号时也强行开仓「找机会」','忽略频繁交易累积的手续费与注意力消耗'] },
+    { en: 'BREAKING PLAN · TRADING BY INSTINCT', ico: '🎭', color: '#0ab0a0', title: '违背计划 · 凭直觉破坏规则', desc: '很多人明明提前做好了交易规则，但临场一看到波动、或因为琐事错过了点位，就完全凭直觉去违背信号。有再好的交易思路、再完善的策略，一旦离开了严格执行，都形同虚设。', items: ['临场因行情波动 / 错过点位而临时放宽或改掉原规则','有明确信号时不执行，凭「感觉」偏离原计划','曾因手动干预，让本可盈利或本应止损的单子变坏'] },
+    { en: 'EMOTIONAL · GREED & FEAR', ico: '🌊', color: '#ff3b30', title: '情绪化操作 · 贪婪与恐惧', desc: '贪婪和恐惧是手动交易里最大的障碍：盈利时怕行情有点波动，就情绪化止盈，错过整段趋势；亏损时又心存侥幸，不愿及时止损，导致亏损越滚越大。连续盈利后容易自大、放宽规则；连续亏损后又消沉、乱改交易方式。所有情绪化的操作，都会让原本有效的策略彻底失效。', items: ['盈利稍有回撤就恐慌止盈，错过主升 / 主跌趋势','亏损时心存侥幸扛单，不止损、越套越深','连赢后自大放宽规则 / 连亏后消沉乱改打法'] },
+    { en: 'NO REVIEW · REPEATING SAME MISTAKES', ico: '🔍', color: '#5856d6', title: '不复盘 · 一直重蹈覆辙', desc: '交易成长最快的方式就是总结失误，但很多人只顾着进场交易，却从不静下心复盘。一次次重复不止损、重仓、跟风造成的亏损，事后短暂后悔，转头依旧重蹈覆辙；喜欢随意套用网络方法，却一直在相同的地方跌倒，找不到失败的根源。这样亏损只是单纯的成本，永远变不成经验和教训。', items: ['做单后很少系统复盘当笔 / 当日 / 当周的操作','同样的错误（不止损 / 重仓 / 追单）在反复出现','复盘停留在「后悔」，没定位到可改进的根本原因'] },
+    { en: 'IMPATIENT · CANNOT SURVIVE DRAWDOWN', ico: '⏳', color: '#ff9500', title: '急躁求快 · 熬不住震荡回撤', desc: '急躁求快是很多交易者的通病：策略执行几天没结果就轻易否定、然后放弃，遇到小幅回撤就怀疑策略失效、想换思路。但交易的本质是长期正期望的兑现，短期的盈亏根本说明不了任何问题。沉不住气、熬不住震荡，往往早已倒在黎明前——这是最可惜的。', items: ['策略执行几天没见效，就想否定、放弃或更换','遇到正常回撤 / 震荡，就怀疑策略已经失效','要求「立刻见效」，无法容忍交易里的等待与不确定性'] },
+]
+
+createApp({
+    setup() {
+        // ===== 通用 =====
+        const tab = ref('check')
+        const todayStr = () => new Date().toISOString().slice(0,10)
+
+        // ===== ① 自查 =====
+        const CHECK_KEY = 'kx_habit_selfcheck_v1'
+        const habits = ref(HABITS.map((h, i) => {
+            let saved = { done: [], open: false }
+            try { saved = JSON.parse(localStorage.getItem(CHECK_KEY))?.[i] || saved } catch (e) {}
+            return { ...h, done: (saved.done || []).map(Boolean), open: !!saved.open }
+        }))
+        const totalItems = computed(() => habits.value.reduce((s, h) => s + h.items.length, 0))
+        const checkedCount = computed(() => habits.value.reduce((s, h) => s + h.done.filter(Boolean).length, 0))
+        const pct = computed(() => totalItems.value ? checkedCount.value / totalItems.value : 0)
+        const gaugeLen = 2 * Math.PI * 50
+        const gaugeColor = computed(() => pct.value === 0 ? '#34c759' : pct.value < 0.4 ? '#ff9500' : pct.value < 0.7 ? '#ff3b30' : '#b3261e')
+        const verdict = computed(() => {
+            const n = habits.value.filter(h => h.done.some(Boolean)).length
+            if (n === 0) return { title: '✅ 全绿 —— 目前没有命中，继续保持', desc: '你已具备清醒的交易纪律感。把这页当作定期复检，行情震荡或情绪上来时，再回来扫一眼。', color: '#1e7d33' }
+            if (n <= 3) return { title: '🟡 中低风险 —— 命中 ' + n + ' 个惯性', desc: '多数习惯还算健康，但命中的几条恰恰是亏损最容易萌芽的地方。建议给每条命中项写一句「反规则」，下次触发前叫停。', color: '#ff9500' }
+            if (n <= 6) return { title: '🟠 中高风险 —— 命中 ' + n + ' 个惯性', desc: '你正在用「最顺人性的方式」交易。每一条都不是孤立的——它们互相喂养。对照最痛的 1-2 条，先立成必须执行的硬约束。', color: '#ff3b30' }
+            return { title: '🔴 高危 —— 命中 ' + n + ' 个惯性', desc: '亏损大概率不是技术问题，而是这些惯性在反复收税。强烈建议先停止实盘，回到复盘：把每笔亏损归到具体惯性，一次只改一条。', color: '#b3261e' }
+        })
+        const verdictColor = computed(() => verdict.value.color)
+        function checkedOf(h) { return h.done.filter(Boolean).length }
+        function persistCheck() { try { localStorage.setItem(CHECK_KEY, JSON.stringify(habits.value.map(h => ({ done: h.done, open: h.open })))) } catch (e) {} }
+        function toggle(i, j) { habits.value[i].done[j] = !habits.value[i].done[j]; persistCheck() }
+        function toggleAll() { const c = habits.value.some(h => !h.open); habits.value.forEach(h => h.open = c); persistCheck() }
+        function reset() { habits.value.forEach(h => { h.done = h.items.map(() => false); h.open = false }); persistCheck() }
+
+        // ===== ② 每日交易 / 金十 =====
+        const quotes = ref({})
+        const quotesTs = ref(0)
+        const calRaw = ref([])
+        const calFilter = ref('all')
+        const flash = ref({})
+        const dailyLoading = ref(false)
+        const dailyErr = ref('')
+        // 黄金消息面（ 强相关）
+        const goldEvRaw = ref([])   // 实时消息流
+        const goldDeRaw = ref([])   // 本周黄金高影响数据事件
+        const goldLoading = ref(false)
+        const goldErr = ref('')
+        const goldTypeF = ref('全部')
+        // 整月  消息面日历
+        const mcCur = ref(new Date())          // 当前查看的年月
+        const mcRaw = ref({ weeks: [], total: 0, today: '' })
+        const mcLoading = ref(false)
+        const mcErr = ref('')
+        const flashTitle = { gold: '黄金', oil: '原油', fed: '美联储', usd: '美元', geo: '地缘', us: '美股' }
+        const flashIcon = { gold: '🟡', oil: '🛢', fed: '🏦', usd: '💵', geo: '🌍', us: '📊' }
+
+        async function loadDaily(force=false) {
+            if (dailyLoading.value) return
+            dailyLoading.value = true; dailyErr.value = ''
+            try {
+                const [q, c, f, g] = await Promise.all([
+                    fetch('/api/jin10/quotes').then(r=>r.json()),
+                    fetch('/api/jin10/calendar').then(r=>r.json()),
+                    fetch('/api/jin10/flash').then(r=>r.json()),
+                    fetch('/api/jin10/gold_news' + (force?'?force=1':'')).then(r=>r.json()),
+                ])
+                if (q.code === 200) { quotes.value = q.data || {}; quotesTs.value = Date.now() }
+                if (c.code === 200) { calRaw.value = decorateCal(c.data || []) }
+                if (f.code === 200) { flash.value = f.data || {} }
+                if (g.code === 200) {
+                    goldEvRaw.value = (g.data && g.data.events) || []
+                    goldDeRaw.value = (g.data && g.data.data_events) || []
+                }
+                const anyErr = [q,c,f,g].filter(x => x.code !== 200)
+                if (anyErr.length) dailyErr.value = anyErr.map(x => x.msg).join('；')
+            } catch (e) {
+                dailyErr.value = '金十请求失败：' + e.message
+            } finally { dailyLoading.value = false }
+        }
+        async function loadGoldNews(force=false) {
+            goldLoading.value = true; goldErr.value = ''
+            try {
+                const g = await fetch('/api/jin10/gold_news' + (force?'?force=1':'')).then(r=>r.json())
+                if (g.code === 200) {
+                    goldEvRaw.value = (g.data && g.data.events) || []
+                    goldDeRaw.value = (g.data && g.data.data_events) || []
+                } else goldErr.value = g.msg || '黄金消息面拉取失败'
+            } catch (e) { goldErr.value = '黄金消息面请求失败：' + e.message }
+            finally { goldLoading.value = false }
+        }
+        function ensureDaily() { if (Object.keys(quotes.value).length === 0 && calRaw.value.length === 0) loadDaily() }
+        // ===== 整月  消息面日历 =====
+        const mcLabel = computed(() => {
+            const y = mcCur.value.getFullYear(), m = mcCur.value.getMonth() + 1
+            return y + '年' + (m < 10 ? '0' : '') + m + '月'
+        })
+        const mcWeeks = computed(() => (mcRaw.value && mcRaw.value.weeks) || [])
+        const mcTodayStr = computed(() => {
+            const d = new Date()
+            return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0')
+        })
+        const mcJin = computed(() => {
+            const n = (mcRaw.value.weeks||[]).reduce((a,w)=>a+w.events.filter(e=>e.source==='jin10').length,0)
+            return '金十实时 ' + n
+        })
+        const mcSched = computed(() => {
+            const n = (mcRaw.value.weeks||[]).reduce((a,w)=>a+w.events.filter(e=>e.source==='schedule').length,0)
+            return n
+        })
+        // ---- 月历筛选：只看美国 / 只看4★以上 / 排除初请 ----
+        const mcFUs = ref(false)    // 只看美国
+        const mcFHigh = ref(false)  // 只看4★以上
+        const mcFNoJob = ref(false) // 排除初请(失业金)
+        function _mcKeep(e) {
+            if (mcFUs.value && !(/(美国|美联储|非农|CPI|PPI|PCE|ISM|JOLT|职位空缺|密歇根|零售|GDP|FOMC)/.test(e.title) || e.source==='schedule')) return false
+            if (mcFHigh.value && (e.star||0) < 4) return false
+            if (mcFNoJob.value && /初请|失业金|JOLT|职位空缺/.test(e.title)) return false
+            return true
+        }
+        const mcWeeksShown = computed(() => {
+            if (!mcFUs.value && !mcFHigh.value && !mcFNoJob.value) return mcWeeks.value
+            return mcWeeks.value
+                .map(w => ({ week_start: w.week_start, events: w.events.filter(_mcKeep) }))
+                .filter(w => w.events.length > 0)
+        })
+        const mcFilteredCount = computed(() => mcWeeksShown.value.reduce((a,w)=>a+w.events.length,0))
+        function mcResetFilter() { mcFUs.value=false; mcFHigh.value=false; mcFNoJob.value=false }
+        const mcHasFilter = computed(() => mcFUs.value || mcFHigh.value || mcFNoJob.value)
+        // 超预期变色：实况>预期(利好美元/利空黄金)标红；否则实况默认绿
+        function mcActCls(e) {
+            const x = e.extra || {}
+            const a = parseFloat(x.actual), c = parseFloat(x.consensus)
+            if (!isNaN(a) && !isNaN(c) && a > c) return 'v-act hot'
+            return 'v-act'
+        }
+        function mcYMStr() { const y=mcCur.value.getFullYear(), m=mcCur.value.getMonth()+1; return y+'-'+(m<10?'0':'')+m }
+        async function loadMonthCal(force=false) {
+            if (mcLoading.value && !force) return
+            mcLoading.value = true; mcErr.value = ''
+            try {
+                const r = await fetch('/api/jin10/month_cal?month=' + mcYMStr()).then(r=>r.json())
+                if (r.code === 200) mcRaw.value = r.data || { weeks: [] }
+                else mcErr.value = r.msg || '月历获取失败'
+            } catch (e) { mcErr.value = '月历请求失败：' + e.message }
+            finally { mcLoading.value = false }
+        }
+        function mcShift(delta) {
+            mcCur.value = new Date(mcCur.value.getFullYear(), mcCur.value.getMonth() + delta, 1)
+            loadMonthCal()
+        }
+        function mcGoNow() { mcCur.value = new Date(); loadMonthCal() }
+        function mcD(iso) { return iso ? iso.slice(5).replace('-','/') : '' }
+        function mcWeekRange(wk) {
+            const start = wk.week_start
+            const s = new Date(start)
+            const e = new Date(s); e.setDate(e.getDate() + 6)
+            const fmt = d => (d.getMonth()+1) + '/' + d.getDate()
+            return fmt(s) + ' - ' + fmt(e)
+        }
+        function decorateCal(rows) {
+            const today = new Date().toISOString().slice(0,10)
+            return rows.map((r, i) => {
+                const dt = (r.pub_time || '').slice(0,10)
+                const star = r.star || 0
+                return Object.assign({}, r, {
+                    _k: dt + '_' + i,
+                    _today: dt === today,
+                    _high: star >= 3,
+                })
+            })
+        }
+        // 黄金相关判定：与 jin10.py 的 _CAL_GOLD_WORDS 同一套关键词，且限美国/美联储主线（日韩欧同类数据不算）
+        const _GOLD_RE = /(CPI|非农|失业率|初请|PCE|PPI|利率决议|美联储|零售销售|就业|通胀|ISM|密歇根|房屋|贸易帐|耐用品|工业产出)/
+        const _US_RE = /(美国|美联储|美元|FOMC)/
+        const _isGoldRow = r => _GOLD_RE.test(r.title || '') && _US_RE.test(r.title || '')
+        const calIsUs = t => /(美国|美联储|美元)/.test(t || '')
+        const calGold = ref(true)   // 默认只看黄金相关，一键关掉看全周
+        const shownCal = computed(() => {
+            let rows = calGold.value ? calRaw.value.filter(_isGoldRow) : calRaw.value
+            const f = calFilter.value
+            if (f === 'bull') rows = rows.filter(r => r.affect_txt === '利多')
+            else if (f === 'bear') rows = rows.filter(r => r.affect_txt === '利空')
+            else if (f === 'high') rows = rows.filter(r => (r.star||0) >= 3)
+            else if (f === 'today') rows = rows.filter(r => r._today)
+            return rows
+        })
+        // 统计卡跟随筛选口径实时联动
+        const calTot = computed(() => shownCal.value.length)
+        const calBull = computed(() => shownCal.value.filter(r => r.affect_txt === '利多').length)
+        const calBear = computed(() => shownCal.value.filter(r => r.affect_txt === '利空').length)
+        const calHighStar = computed(() => shownCal.value.filter(r => (r.star||0) >= 3).length)
+        const calToday = computed(() => shownCal.value.filter(r => r._today).length)
+        const calAllN = computed(() => calRaw.value.length)
+        const calGoldN = computed(() => calRaw.value.filter(_isGoldRow).length)
+        function fmtCalTime(t) { return t ? t.slice(5,16) : '—' }
+        function starSym(s) { s = s||0; return '★'.repeat(Math.min(5, s)) }
+        function affText(a) {
+            if (a === '利多') return '利多 ↑'
+            if (a === '利空') return '利空 ↓'
+            if (a === '未公布') return '待公布'
+            if (a === '影响较小') return '影响小'
+            return '中性'
+        }
+        function affClass(a) {
+            if (a === '利多') return 'pt-bull'
+            if (a === '利空') return 'pt-bear'
+            return 'pt-neu'
+        }
+        function chgClass(q) { const p = parseFloat(q.ups_percent); return p > 0 ? 'up' : p < 0 ? 'down' : 'flat' }
+        function arrow(q) { const p = parseFloat(q.ups_percent); return p > 0 ? '▲' : p < 0 ? '▼' : '—' }
+        function fmtTs(ts) { try { return new Date(ts).toLocaleTimeString('zh-CN', {hour12:false}) } catch(e){ return '' } }
+        function fmtFlashTime(t) { return t ? t.slice(5,16) : '' }
+        function shortFlash(it) {
+            // flash content 可能是多行聚合文本，尽量截取首条有效行
+            let c = it.content || it.title || ''
+            c = c.replace(/【|】/g, '')
+            // 去掉 "国内新闻：N." "国际新闻：" 前缀干扰，取前若干字符
+            c = c.replace(/\d+\.\s*/g, '')
+            c = c.replace(/国内新闻：|国际新闻：/g, '')
+            c = c.replace(/\n/g, ' ')
+            return c.length > 90 ? c.slice(0, 90) + '…' : c
+        }
+
+        // ===== 黄金消息面 computeds/helpers =====
+        const TYPE_ORDER = ['全部','讲话','数据','货币','地缘','央行','市场']
+        const shownGoldEv = computed(() => {
+            if (goldTypeF.value === '全部') return goldEvRaw.value
+            return goldEvRaw.value.filter(e => e.type === goldTypeF.value)
+        })
+        const goldBull = computed(() => goldEvRaw.value.filter(e => e.affect === '利多').length)
+        const goldBear = computed(() => goldEvRaw.value.filter(e => e.affect === '利空').length)
+        const goldDataTot = computed(() => goldDeRaw.value.length)
+        const goldHighData = computed(() => goldDeRaw.value.filter(r => (r.star||0) >= 3).length)
+        const goldUsData = computed(() => goldDeRaw.value.filter(r => r.us).length)
+        const goldDeShown = computed(() => goldDeRaw.value.slice(0, 22))
+        function goldT(t) { return t ? t.slice(11,16) : '' }
+        function typeLabel(t) { return t || '要闻' }
+        function goldDotCls(a) { return a === '利多' ? 'gd-bull' : a === '利空' ? 'gd-bear' : 'gd-neu' }
+        function deAffText(r) {
+            const a = r.affect_txt
+            if (a === '利多') return '利多 ↑'
+            if (a === '利空') return '利空 ↓'
+            if (a === '未公布' || a === '') return '待公布'
+            if (a === '影响较小') return '影响小'
+            return '中性'
+        }
+        function deAffClass(r) {
+            const a = r.affect_txt
+            if (a === '利多') return 'pt-bull'
+            if (a === '利空') return 'pt-bear'
+            if (a === '影响较小' || a === '中性') return 'pt-neu'
+            return 'pt-neu'
+        }
+
+        // ===== ③ 交易计划 =====
+        const PLAN_KEY = 'kx_daily_plan_v1'
+        const plan = reactive({
+            date: todayStr(), symbol: '', direction: '观望',
+            entry: '', sl: '', tp: '', lot: '', signal: '', why: '', note: '',
+        })
+        const plans = ref([])
+        const STATUS = ['open', 'done']   // 简化：进场中 / 已了结
+        function loadPlans() {
+            try { plans.value = JSON.parse(localStorage.getItem(PLAN_KEY)) || [] } catch (e) { plans.value = [] }
+        }
+        function savePlan() {
+            const p = JSON.parse(JSON.stringify({ ...plan }))
+            p.id = Date.now().toString(36) + Math.random().toString(36).slice(2,6)
+            p.created = new Date().toISOString()
+            p.status = 'open'
+            plans.value.unshift(p)
+            persistPlans(); clearPlanForm()
+        }
+        function persistPlans() { try { localStorage.setItem(PLAN_KEY, JSON.stringify(plans.value)) } catch (e) {} }
+        function delPlan(id) { plans.value = plans.value.filter(p => p.id !== id); persistPlans() }
+        function advanceStatus(id) {
+            const p = plans.value.find(x => x.id === id)
+            if (p) { p.status = p.status === 'open' ? 'done' : 'open'; persistPlans() }
+        }
+        function clearPlanForm() {
+            plan.symbol=''; plan.direction='观望'; plan.entry=''; plan.sl=''; plan.tp=''
+            plan.lot=''; plan.signal=''; plan.why=''; plan.note=''
+        }
+        function statusText(s) { return s === 'done' ? '已了结' : '进场/待确认' }
+        function statusChip(s) { return s === 'done' ? 'done' : 'open' }
+        const riskCalc = computed(() => {
+            const e = parseFloat(plan.entry), s = parseFloat(plan.sl), t = parseFloat(plan.tp)
+            if (!e || !s || !t) return null
+            const slD = Math.abs(e - s), tpD = Math.abs(t - e)
+            if (!slD) return null
+            return { rr: (tpD / slD).toFixed(2), slDist: slD.toFixed(1), riskPer: (0.01 * slD).toFixed(2) }
+        })
+
+        onMounted(() => { loadPlans(); loadDaily(); loadMonthCal() })
+
+        return {
+            tab, habits, totalItems, checkedCount, pct, gaugeLen, gaugeColor, verdict, verdictColor,
+            checkedOf, toggle, toggleAll, reset,
+            quotes, quotesTs, calRaw, calFilter, flash, dailyLoading, dailyErr, flashTitle, flashIcon,
+            loadDaily, ensureDaily, shownCal, calTot, calBull, calBear, calHighStar, calToday,
+            calGold, calAllN, calGoldN, calIsUs,
+            fmtCalTime, starSym, affText, affClass, chgClass, arrow, fmtTs, fmtFlashTime, shortFlash,
+            goldEvRaw, goldDeRaw, goldLoading, goldErr, goldTypeF,
+            loadGoldNews, shownGoldEv, goldBull, goldBear,
+            goldDataTot, goldHighData, goldUsData, goldDeShown,
+            goldT, typeLabel, goldDotCls, deAffText, deAffClass,
+            mcCur, mcRaw, mcLoading, mcErr, mcLabel, mcWeeks, mcTodayStr, mcJin, mcSched,
+            mcFUs, mcFHigh, mcFNoJob, mcHasFilter, mcWeeksShown, mcFilteredCount, mcResetFilter, mcActCls,
+            loadMonthCal, mcShift, mcGoNow, mcD, mcWeekRange,
+            plan, plans, loadPlans, savePlan, delPlan, advanceStatus, clearPlanForm,
+            statusText, statusChip, riskCalc,
+        }
+    },
+}).mount('#app')
+</script>
+<script src="/static/components/topnav.js" defer></script></body>
+</html>
